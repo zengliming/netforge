@@ -1,0 +1,10 @@
+[proxy]
+listen = "127.0.0.1:8080"
+target = "127.0.0.1:9000"
+
+[proxy.tls]
+cert_path = "./certs/server.crt"
+key_path = "./certs/server.key"
+
+[socket]
+default_format = "text"  # hex, text, json

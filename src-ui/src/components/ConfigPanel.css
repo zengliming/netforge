@@ -1,0 +1,87 @@
+/* Config Panel Styles */
+
+.config-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1em;
+  padding: 0.5em;
+}
+
+.config-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75em;
+}
+
+.config-form .form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25em;
+}
+
+.config-form label {
+  font-size: 0.75em;
+  color: var(--text-secondary);
+}
+
+.config-form select {
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 0.5em 0.75em;
+  font-size: 0.875em;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.config-form select:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+}
+
+.button-group {
+  display: flex;
+  gap: 0.5em;
+  margin-top: 0.5em;
+}
+
+.btn-secondary {
+  flex: 1;
+  background-color: var(--bg-secondary);
+  border-color: var(--border-color);
+}
+
+.btn-secondary:hover {
+  background-color: var(--bg-tertiary);
+}
+
+.btn-primary {
+  flex: 1;
+  background-color: var(--accent-primary);
+  border-color: var(--accent-primary);
+  color: white;
+}
+
+.btn-primary:hover {
+  background-color: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.success-message {
+  color: var(--accent-success);
+  padding: 0.5em;
+  background-color: rgba(16, 185, 129, 0.1);
+  border-radius: 4px;
+}
+
+.error-message {
+  color: var(--accent-error);
+  padding: 0.5em;
+  background-color: rgba(239, 68, 68, 0.1);
+  border-radius: 4px;
+}

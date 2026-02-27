@@ -1,0 +1,545 @@
+//! Tauri 命令模块
+//!
+//! 提供 GUI 与后端的桥梁接口
+
+use netforge::config::Config;
+use netforge::events::{DataFormat, ProxyEvent, ProxyStatus, SocketEvent};
+use netforge::proxy::{run_tcp_proxy_with_events, run_tls_proxy_with_events};
+use netforge::socket::format::DataFormat as SocketDataFormat;
+use netforge::socket::{run_socket_client_gui, run_socket_server_gui};
+use netforge::state::{AppStateHandle, ConfigSnapshot, ProxyState};
+use serde::{Deserialize, Serialize};
+use std::net::SocketAddr;
+use std::sync::Arc;
+use tokio::sync::{mpsc, Mutex};
+use tokio_util::sync::CancellationToken;
+use tauri::Emitter;
+
+/// 运行时代理任务信息
+struct ProxyTask {
+    cancel_token: CancellationToken,
+    handle: Option<tokio::task::JoinHandle<()>>,
+}
+
+/// 运行时 Socket 任务信息
+struct SocketTask {
+    cancel_token: CancellationToken,
+    handle: Option<tokio::task::JoinHandle<()>>,
+    input_sender: Option<mpsc::Sender<(SocketAddr, Vec<u8>)>>,
+}
+
+/// 应用运行时状态
+#[derive(Clone)]
+pub struct RuntimeState {
+    /// 代理任务
+    proxy_task: Arc<Mutex<Option<ProxyTask>>>,
+    /// Socket 服务器任务
+    socket_task: Arc<Mutex<Option<SocketTask>>>,
+    /// Socket 客户端任务
+    socket_client_task: Arc<Mutex<Option<SocketTask>>>,
+}
+impl RuntimeState {
+    pub fn new() -> Self {
+        Self {
+            proxy_task: Arc::new(Mutex::new(None)),
+            socket_task: Arc::new(Mutex::new(None)),
+            socket_client_task: Arc::new(Mutex::new(None)),
+        }
+    }
+}
+
+impl Default for RuntimeState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// 启动代理
+#[tauri::command]
+pub async fn start_proxy(
+    listen: String,
+    target: String,
+    tls: bool,
+    cert: Option<String>,
+    key: Option<String>,
+    app_handle: tauri::AppHandle,
+    runtime_state: tauri::State<'_, RuntimeState>,
+    app_state: tauri::State<'_, AppStateHandle>,
+) -> Result<(), String> {
+    // 停止现有的代理
+    stop_proxy_internal(&app_state, &runtime_state).await;
+
+    // 创建新的取消令牌
+    let cancel_token = CancellationToken::new();
+
+    // 创建事件通道
+    let (event_sender, mut event_receiver) = mpsc::channel::<ProxyEvent>(100);
+
+    // 更新应用状态
+    {
+        let mut state = app_state.lock().await;
+        state.proxy = ProxyState {
+            status: ProxyStatus::Running {
+                listen: listen.clone(),
+                target: target.clone(),
+            },
+            connections: Vec::new(),
+            total_bytes_in: 0,
+            total_bytes_out: 0,
+        };
+    }
+
+    // 发送状态变更事件
+    if let Err(e) = app_handle.emit("proxy-status-changed", "running") {
+        eprintln!("Failed to emit proxy status: {}", e);
+    }
+
+    // 克隆用于任务的变量
+    let task_app_handle = app_handle.clone();
+    let task_app_state = app_state.clone();
+    let task_cancel_token = cancel_token.clone();
+
+    // 启动代理任务
+    let handle = tokio::spawn(async move {
+        // 事件处理循环
+        let mut event_app_handle = task_app_handle;
+        let mut event_app_state = task_app_state;
+
+        tokio::spawn(async move {
+            while let Some(event) = event_receiver.recv().await {
+                match event {
+                    ProxyEvent::NewConnection {
+                        id,
+                        source,
+                        target,
+                        timestamp,
+                    } => {
+                        // 更新状态
+                        let mut state = event_app_state.lock().await;
+                        state.proxy.connections.push(netforge::events::ConnectionInfo {
+                            id: id.clone(),
+                            source: source.clone(),
+                            target: target.clone(),
+                            bytes_in: 0,
+                            bytes_out: 0,
+                            connected_at: timestamp,
+                            status: netforge::events::ConnectionStatus::Active,
+                        });
+
+                        // 发送事件到前端
+                        if let Err(e) = event_app_handle.emit("proxy-new-connection", &event) {
+                            eprintln!("Failed to emit proxy event: {}", e);
+                        }
+                    }
+                    ProxyEvent::DataTransferred {
+                        id,
+                        bytes_from_client,
+                        bytes_from_server,
+                    } => {
+                        // 更新状态
+                        let mut state = event_app_state.lock().await;
+                        state.proxy.total_bytes_in = bytes_from_client;
+                        state.proxy.total_bytes_out = bytes_from_server;
+
+                        // 发送事件到前端
+                        if let Err(e) = event_app_handle.emit("proxy-data-transferred", &event) {
+                            eprintln!("Failed to emit proxy event: {}", e);
+                        }
+                    }
+                    ProxyEvent::ConnectionClosed {
+                        id,
+                        total_bytes_from_client,
+                        total_bytes_from_server,
+                    } => {
+                        // 更新状态
+                        let mut state = event_app_state.lock().await;
+                        if let Some(conn) = state
+                            .proxy
+                            .connections
+                            .iter_mut()
+                            .find(|c| c.id == id)
+                        {
+                            conn.status = netforge::events::ConnectionStatus::Closed;
+                            conn.bytes_in = total_bytes_from_client;
+                            conn.bytes_out = total_bytes_from_server;
+                        }
+
+                        // 发送事件到前端
+                        if let Err(e) = event_app_handle.emit("proxy-connection-closed", &event) {
+                            eprintln!("Failed to emit proxy event: {}", e);
+                        }
+                    }
+                    ProxyEvent::StatusChanged { status } => {
+                        let mut state = event_app_state.lock().await;
+                        state.proxy.status = status.clone();
+
+                        // 发送事件到前端
+                        if let Err(e) = event_app_handle.emit("proxy-status-changed", &status) {
+                            eprintln!("Failed to emit proxy event: {}", e);
+                        }
+                    }
+                    ProxyEvent::Error { message } => {
+                        // 发送错误事件到前端
+                        if let Err(e) = event_app_handle.emit("proxy-error", &message) {
+                            eprintln!("Failed to emit proxy error: {}", e);
+                        }
+                    }
+                }
+            }
+        });
+
+        // 运行代理
+        let result = if tls {
+            if let (Some(cert_path), Some(key_path)) = (cert, key) {
+                run_tls_proxy_with_events(
+                    &listen,
+                    &target,
+                    &cert_path,
+                    &key_path,
+                    task_cancel_token,
+                    event_sender,
+                )
+                .await
+            } else {
+                Err(netforge::error::ProxyError::CertError(
+                    "TLS 模式需要证书和私钥".to_string(),
+                ))
+            }
+        } else {
+            run_tcp_proxy_with_events(&listen, &target, task_cancel_token, event_sender).await
+        };
+
+        if let Err(e) = result {
+            eprintln!("Proxy error: {}", e);
+        }
+    });
+
+    // 保存任务信息
+    {
+        let mut proxy_task = runtime_state.proxy_task.lock().await;
+        *proxy_task = Some(ProxyTask {
+            cancel_token,
+            handle: Some(handle),
+        });
+    }
+
+    Ok(())
+}
+
+/// 停止代理（内部函数）
+async fn stop_proxy_internal(
+    app_state: &AppStateHandle,
+    runtime_state: &RuntimeState,
+) {
+    let mut proxy_task = runtime_state.proxy_task.lock().await;
+    if let Some(task) = proxy_task.take() {
+        task.cancel_token.cancel();
+
+        // 等待任务结束（最多 5 秒）
+        if let Some(handle) = task.handle {
+            tokio::time::timeout(tokio::time::Duration::from_secs(5), handle)
+                .await
+                .ok();
+        }
+
+        // 更新应用状态
+        let mut state = app_state.lock().await;
+        state.proxy.status = ProxyStatus::Stopped;
+    }
+}
+
+/// 停止代理
+#[tauri::command]
+pub async fn stop_proxy(
+    app_handle: tauri::AppHandle,
+    runtime_state: tauri::State<'_, RuntimeState>,
+    app_state: tauri::State<'_, AppStateHandle>,
+) -> Result<(), String> {
+    stop_proxy_internal(&app_state, &runtime_state).await;
+
+    // 发送状态变更事件
+    if let Err(e) = app_handle.emit("proxy-status-changed", "stopped") {
+        eprintln!("Failed to emit proxy status: {}", e);
+    }
+
+    Ok(())
+}
+
+/// 获取代理状态
+#[tauri::command]
+pub async fn get_proxy_status(app_state: tauri::State<'_, AppStateHandle>) -> Result<ProxyState, String> {
+    let state = app_state.lock().await;
+    Ok(state.proxy.clone())
+}
+
+/// 启动 Socket 服务器
+#[tauri::command]
+pub async fn start_socket_server(
+    listen: String,
+    format: String,
+    app_handle: tauri::AppHandle,
+    runtime_state: tauri::State<'_, RuntimeState>,
+    app_state: tauri::State<'_, AppStateHandle>,
+) -> Result<(), String> {
+    // 停止现有的 Socket 服务器
+    stop_socket_server_internal(&runtime_state).await;
+
+    // 创建新的取消令牌
+    let cancel_token = CancellationToken::new();
+
+    // 解析数据格式
+    let socket_format: SocketDataFormat = format
+        .parse()
+        .map_err(|e: String| format!("无效的数据格式: {}", e))?;
+
+    // 创建事件通道
+    let (event_sender, mut event_receiver) = mpsc::channel::<SocketEvent>(100);
+
+    // 创建输入通道
+    let (input_sender, input_receiver) = mpsc::channel::<(SocketAddr, Vec<u8>)>(100);
+
+    // 发送启动成功事件
+    if let Err(e) = app_handle.emit("socket-server-started", &listen) {
+        eprintln!("Failed to emit socket server started: {}", e);
+    }
+
+    // 克隆用于任务的变量
+    let task_app_handle = app_handle.clone();
+    let task_app_state = app_state.clone();
+    let task_cancel_token = cancel_token.clone();
+
+    // 启动 Socket 服务器任务
+    let handle = tokio::spawn(async move {
+        // 事件处理循环
+        let mut event_app_handle = task_app_handle;
+        let mut event_app_state = task_app_state;
+
+        tokio::spawn(async move {
+            while let Some(event) = event_receiver.recv().await {
+                match event {
+                    SocketEvent::Connected {
+                        session_id,
+                        remote_addr,
+                    } => {
+                        // 更新状态
+                        let mut state = event_app_state.lock().await;
+                        state.socket_sessions.push(netforge::events::SocketSession {
+                            id: session_id.clone(),
+                            remote_addr: remote_addr.clone(),
+                            mode: netforge::events::SocketMode::Server,
+                            format: convert_socket_format_to_events_format(socket_format.clone()),
+                            connected_at: std::time::SystemTime::now()
+                                .duration_since(std::time::UNIX_EPOCH)
+                                .unwrap_or_default()
+                                .as_secs() as i64,
+                        });
+
+                        // 发送事件到前端
+                        if let Err(e) = event_app_handle.emit("socket-connected", &event) {
+                            eprintln!("Failed to emit socket event: {}", e);
+                        }
+                    }
+                    SocketEvent::Disconnected { session_id } => {
+                        // 更新状态
+                        let mut state = event_app_state.lock().await;
+                        state
+                            .socket_sessions
+                            .retain(|s| s.id != session_id);
+
+                        // 发送事件到前端
+                        if let Err(e) = event_app_handle.emit("socket-disconnected", &session_id) {
+                            eprintln!("Failed to emit socket event: {}", e);
+                        }
+                    }
+                    SocketEvent::DataReceived {
+                        session_id,
+                        data,
+                        format,
+                    } => {
+                        // 发送事件到前端
+                        if let Err(e) = event_app_handle.emit(
+                            "socket-data-received",
+                            serde_json::json!({
+                                "session_id": session_id,
+                                "data": data,
+                                "format": format,
+                            }),
+                        ) {
+                            eprintln!("Failed to emit socket event: {}", e);
+                        }
+                    }
+                    SocketEvent::DataSent { session_id, data } => {
+                        // 发送事件到前端
+                        if let Err(e) = event_app_handle.emit(
+                            "socket-data-sent",
+                            serde_json::json!({
+                                "session_id": session_id,
+                                "data": data,
+                            }),
+                        ) {
+                            eprintln!("Failed to emit socket event: {}", e);
+                        }
+                    }
+                    SocketEvent::Error {
+                        session_id,
+                        message,
+                    } => {
+                        // 发送错误事件到前端
+                        if let Err(e) = event_app_handle.emit(
+                            "socket-error",
+                            serde_json::json!({
+                                "session_id": session_id,
+                                "message": message,
+                            }),
+                        ) {
+                            eprintln!("Failed to emit socket error: {}", e);
+                        }
+                    }
+                }
+            }
+        });
+
+        // 运行 Socket 服务器
+        let result =
+            run_socket_server_gui(task_cancel_token, event_sender, input_receiver, &listen, socket_format)
+                .await;
+
+        if let Err(e) = result {
+            eprintln!("Socket server error: {}", e);
+        }
+    });
+
+    // 保存任务信息
+    {
+        let mut socket_task = runtime_state.socket_task.lock().await;
+        *socket_task = Some(SocketTask {
+            cancel_token,
+            handle: Some(handle),
+            input_sender: None, // Socket 服务器不需要通过命令发送数据
+        });
+    }
+
+    Ok(())
+}
+
+/// 停止 Socket 服务器（内部函数）
+async fn stop_socket_server_internal(runtime_state: &RuntimeState) {
+    let mut socket_task = runtime_state.socket_task.lock().await;
+    if let Some(task) = socket_task.take() {
+        task.cancel_token.cancel();
+
+        // 等待任务结束（最多 5 秒）
+        if let Some(handle) = task.handle {
+            tokio::time::timeout(tokio::time::Duration::from_secs(5), handle)
+                .await
+                .ok();
+        }
+    }
+}
+
+/// 停止 Socket 服务器
+#[tauri::command]
+pub async fn stop_socket_server(
+    app_handle: tauri::AppHandle,
+    runtime_state: tauri::State<'_, RuntimeState>,
+) -> Result<(), String> {
+    stop_socket_server_internal(&runtime_state).await;
+
+    // 发送停止事件
+    if let Err(e) = app_handle.emit("socket-server-stopped", ()) {
+        eprintln!("Failed to emit socket server stopped: {}", e);
+    }
+
+    Ok(())
+}
+
+/// 发送 Socket 数据
+#[tauri::command]
+pub async fn send_socket_data(
+    session_id: String,
+    data: String,
+    runtime_state: tauri::State<'_, RuntimeState>,
+) -> Result<(), String> {
+    // 将 session_id 解析为 SocketAddr
+    let addr: SocketAddr = session_id.parse().map_err(|e| format!("无效的会话 ID: {}", e))?;
+
+    // 将数据转换为字节
+    let data_bytes = data.into_bytes();
+
+    // 获取 Socket 服务器任务
+    let socket_task: tokio::sync::MutexGuard<'_, Option<SocketTask>> =
+        runtime_state.socket_task.lock().await;
+    if let Some(task) = socket_task.as_ref() {
+        if let Err(e) = task.input_sender.as_ref().unwrap().send((addr, data_bytes)).await {
+            return Err(format!("发送数据失败: {}", e));
+        }
+    } else {
+        return Err("Socket 服务器未运行".to_string());
+    }
+
+    Ok(())
+}
+
+/// 获取配置
+#[tauri::command]
+pub async fn get_config(
+    app_state: tauri::State<'_, AppStateHandle>,
+) -> Result<Option<ConfigSnapshot>, String> {
+    let state = app_state.lock().await;
+    Ok(state.config.clone())
+}
+
+/// 保存配置
+#[tauri::command]
+pub async fn save_config(
+    config: Config,
+    app_state: tauri::State<'_, AppStateHandle>,
+) -> Result<(), String> {
+    let mut state = app_state.lock().await;
+    state.config = Some(ConfigSnapshot {
+        proxy_listen: Some(config.proxy.listen),
+        proxy_target: Some(config.proxy.target),
+        socket_format: match config.socket.default_format.as_str() {
+            "hex" => DataFormat::Hex,
+            "text" => DataFormat::Text,
+            "json" => DataFormat::Json,
+            _ => DataFormat::Text,
+        },
+    });
+
+    Ok(())
+}
+
+/// DataFormat 转换辅助函数
+fn convert_socket_format_to_events_format(format: SocketDataFormat) -> DataFormat {
+    match format {
+        SocketDataFormat::Hex => DataFormat::Hex,
+        SocketDataFormat::Text => DataFormat::Text,
+        SocketDataFormat::Json => DataFormat::Json,
+    }
+}
+
+/// 初始化运行时状态
+pub fn init_runtime_state() -> RuntimeState {
+    RuntimeState::new()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_runtime_state_new() {
+        let _state = RuntimeState::new();
+    }
+
+    #[test]
+    fn test_socket_addr_input_serialization() {
+        let input = SocketAddrInput {
+            session_id: "127.0.0.1:8080".to_string(),
+            data: vec![1, 2, 3],
+        };
+        let json = serde_json::to_string(&input).unwrap();
+        assert!(json.contains("127.0.0.1:8080"));
+    }
+}

@@ -1,0 +1,64 @@
+# Rust
+/target/
+**/target/
+**/*.rs.bk
+*.pdb
+
+# Cargo
+Cargo.lock
+
+# Node.js / 前端
+**/node_modules/
+**/dist/
+**/build/
+.npm
+*.tsbuildinfo
+
+# 日志和临时文件
+*.log
+*.tmp
+*.bak
+*.bak[0-9]
+*.swp
+*~
+
+# IDE 和编辑器
+.idea/
+.vscode/
+*.sublime-*
+.fleet/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Windows
+Thumbs.db
+ehthumbs.db
+
+# 环境变量和敏感文件
+.env
+.env.*
+!.env.example
+*.local
+
+# Tauri 构建产物
+src-tauri/target/
+
+# 证书文件 (敏感)
+*.pem
+*.key
+*.crt
+!certs/.gitkeep
+
+# 工具生成的目录
+.sisyphus/
+
+# 测试覆盖率
+coverage/
+*.lcov
+
+# 调试文件
+*.dSYM/

@@ -1,0 +1,92 @@
+/* Data Panel Styles */
+
+.data-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.data-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5em;
+  border-bottom: 1px solid var(--border-color);
+  background-color: var(--bg-secondary);
+}
+
+.data-toolbar .tabs {
+  display: flex;
+  gap: 0.25em;
+  padding: 0;
+  border: none;
+  background: transparent;
+}
+
+.toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75em;
+}
+
+.btn-icon {
+  padding: 0.25em 0.5em;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.btn-icon:hover {
+  background-color: var(--bg-tertiary);
+}
+
+.btn-icon.active {
+  color: var(--accent-primary);
+}
+
+.data-content {
+  flex: 1;
+  overflow: auto;
+  padding: 0.5em;
+  font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+  font-size: 0.8125em;
+}
+
+.data-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+}
+
+.data-text {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.data-entry {
+  display: flex;
+  gap: 0.5em;
+  padding: 0.125em 0;
+}
+
+.data-entry.in .entry-direction {
+  color: var(--accent-success);
+}
+
+.data-entry.out .entry-direction {
+  color: var(--accent-primary);
+}
+
+.entry-direction {
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.entry-data {
+  color: var(--text-primary);
+  word-break: break-all;
+}

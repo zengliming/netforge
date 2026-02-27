@@ -1,0 +1,72 @@
+/* Connection List Styles */
+
+.connection-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25em;
+}
+
+.connection-list-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 100px;
+}
+
+.connection-item {
+  padding: 0.5em;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  border: 1px solid transparent;
+}
+
+.connection-item:hover {
+  background-color: var(--bg-secondary);
+}
+
+.connection-item.selected {
+  background-color: var(--bg-tertiary);
+  border-color: var(--accent-primary);
+}
+
+.connection-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.25em;
+}
+
+.connection-source {
+  font-weight: 500;
+  font-size: 0.875em;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.connection-status {
+  font-size: 0.625em;
+}
+
+.connection-status.status-active {
+  color: var(--accent-success);
+}
+
+.connection-status.status-closed {
+  color: var(--text-muted);
+}
+
+.connection-target {
+  margin-bottom: 0.25em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.connection-stats {
+  display: flex;
+  gap: 1em;
+}
