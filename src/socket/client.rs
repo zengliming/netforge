@@ -26,16 +26,16 @@ fn map_event_data_format(format: DataFormat) -> EventDataFormat {
   }
 }
 
-async fn send_socket_event(eventSender: &mpsc::Sender<SocketEvent>, event: SocketEvent) {
-  if let Err(err) = eventSender.send(event).await {
+async fn send_socket_event(event_sender: &mpsc::Sender<SocketEvent>, event: SocketEvent) {
+  if let Err(err) = event_sender.send(event).await {
     warn!("Failed to send socket event: {}", err);
   }
 }
 
 pub async fn run_socket_client_gui(
-  cancelToken: CancellationToken,
-  eventSender: mpsc::Sender<SocketEvent>,
-  mut inputReceiver: mpsc::Receiver<String>,
+  cancel_token: CancellationToken,
+  event_sender: mpsc::Sender<SocketEvent>,
+  mut input_receiver: mpsc::Receiver<String>,
   addr: &str,
   format: DataFormat,
 ) -> Result<(), SocketError> {
@@ -43,7 +43,7 @@ pub async fn run_socket_client_gui(
     Ok(stream) => stream,
     Err(err) => {
       send_socket_event(
-        &eventSender,
+        &event_sender,
         SocketEvent::Error {
           session_id: None,
           message: format!("连接 {} 失败: {}", addr, err),
@@ -54,12 +54,12 @@ pub async fn run_socket_client_gui(
     }
   };
 
-  let sessionId = build_session_id(addr);
-  info!("Connected to {} (session: {})", addr, sessionId);
+  let session_id = build_session_id(addr);
+  info!("Connected to {} (session: {})", addr, session_id);
   send_socket_event(
-    &eventSender,
+    &event_sender,
     SocketEvent::Connected {
-      session_id: sessionId.clone(),
+      session_id: session_id.clone(),
       remote_addr: addr.to_string(),
     },
   )
@@ -67,79 +67,79 @@ pub async fn run_socket_client_gui(
 
   let (reader, mut writer) = stream.into_split();
   let mut reader = BufReader::new(reader);
-  let eventFormat = map_event_data_format(format);
+  let event_format = map_event_data_format(format);
   let mut buf = [0u8; 4096];
-  let mut runError: Option<SocketError> = None;
+  let mut run_error: Option<SocketError> = None;
 
   loop {
     tokio::select! {
-      _ = cancelToken.cancelled() => {
-        info!("Socket client cancelled (session: {})", sessionId);
+      _ = cancel_token.cancelled() => {
+        info!("Socket client cancelled (session: {})", session_id);
         break;
       }
-      readResult = reader.read(&mut buf) => {
-        match readResult {
+      read_result = reader.read(&mut buf) => {
+        match read_result {
           Ok(0) => {
-            info!("Server closed connection (session: {})", sessionId);
+            info!("Server closed connection (session: {})", session_id);
             break;
           }
           Ok(n) => {
             send_socket_event(
-              &eventSender,
+              &event_sender,
               SocketEvent::DataReceived {
-                session_id: sessionId.clone(),
+                session_id: session_id.clone(),
                 data: buf[..n].to_vec(),
-                format: eventFormat.clone(),
+                format: event_format.clone(),
               },
             )
             .await;
           }
           Err(err) => {
-            error!("Read error (session {}): {}", sessionId, err);
+            error!("Read error (session {}): {}", session_id, err);
             send_socket_event(
-              &eventSender,
+              &event_sender,
               SocketEvent::Error {
-                session_id: Some(sessionId.clone()),
+                session_id: Some(session_id.clone()),
                 message: format!("读取数据失败: {}", err),
               },
             )
             .await;
-            runError = Some(SocketError::IoError(err));
+            run_error = Some(SocketError::IoError(err));
             break;
           }
         }
       }
-      outbound = inputReceiver.recv() => {
+      outbound = input_receiver.recv() => {
         match outbound {
           Some(line) => {
             let mut data = line.into_bytes();
             data.push(b'\n');
 
             if let Err(err) = writer.write_all(&data).await {
-              error!("Write error (session {}): {}", sessionId, err);
+              error!("Write error (session {}): {}", session_id, err);
               send_socket_event(
-                &eventSender,
+                &event_sender,
                 SocketEvent::Error {
-                  session_id: Some(sessionId.clone()),
+                  session_id: Some(session_id.clone()),
                   message: format!("发送数据失败: {}", err),
                 },
               )
               .await;
-              runError = Some(SocketError::IoError(err));
+              run_error = Some(SocketError::IoError(err));
               break;
             }
 
             send_socket_event(
-              &eventSender,
+              &event_sender,
               SocketEvent::DataSent {
-                session_id: sessionId.clone(),
+                session_id: session_id.clone(),
                 data,
               },
             )
             .await;
           }
           None => {
-            info!("GUI input channel closed (session: {})", sessionId);
+            info!("GUI input channel closed (session: {})", session_id);
             break;
           }
         }
@@ -148,14 +148,14 @@ pub async fn run_socket_client_gui(
   }
 
   send_socket_event(
-    &eventSender,
+    &event_sender,
     SocketEvent::Disconnected {
-      session_id: sessionId,
+      session_id: session_id,
     },
   )
   .await;
 
-  if let Some(err) = runError {
+  if let Some(err) = run_error {
     return Err(err);
   }
 

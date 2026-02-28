@@ -5,10 +5,11 @@
 mod tauri_commands;
 
 use netforge::state::AppState;
-use tauri_commands::{init_runtime_state, RuntimeState};
+use tauri_commands::init_runtime_state;
 use tauri_commands::{
     start_proxy, stop_proxy, get_proxy_status,
     start_socket_server, stop_socket_server, send_socket_data,
+    start_socket_client, stop_socket_client, send_client_data,
     get_config, save_config,
 };
 
@@ -22,14 +23,12 @@ fn main() {
         .manage(app_state)
         .manage(runtime_state)
         .invoke_handler(tauri::generate_handler![
-            start_proxy,
-            stop_proxy,
-            get_proxy_status,
-            start_socket_server,
-            stop_socket_server,
-            send_socket_data,
-            get_config,
-            save_config,
+    start_proxy, stop_proxy, get_proxy_status,
+    start_socket_server, stop_socket_server, send_socket_data,
+            start_socket_client,
+            stop_socket_client,
+            send_client_data,
+    get_config, save_config,
         ])
         .run(tauri::generate_context!())
         .expect("启动 Tauri 应用失败");

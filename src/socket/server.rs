@@ -24,11 +24,12 @@ fn map_event_data_format(format: DataFormat) -> EventDataFormat {
 }
 
 async fn send_socket_event(eventSender: &mpsc::Sender<SocketEvent>, event: SocketEvent) {
+  eprintln!("[DEBUG] send_socket_event: {:?}", event);
   if let Err(err) = eventSender.send(event).await {
+    eprintln!("[ERROR] Failed to send socket event: {}", err);
     warn!("Failed to send socket event: {}", err);
   }
 }
-
 async fn handle_gui_outbound_data(
   eventSender: &mpsc::Sender<SocketEvent>,
   clients: &SharedClients,
@@ -209,6 +210,7 @@ pub async fn run_socket_server_gui(
     }
   };
 
+  eprintln!("[DEBUG] Socket server(gui) listening on {}", listen);
   info!("Socket server(gui) listening on {}", listen);
   let clients: SharedClients = Arc::new(RwLock::new(HashMap::new()));
   let mut inputReceiver = inputReceiver;
@@ -222,10 +224,12 @@ pub async fn run_socket_server_gui(
       acceptResult = listener.accept() => {
         match acceptResult {
           Ok((stream, addr)) => {
+            eprintln!("[DEBUG] Accepted connection from {}", addr);
             let taskCancelToken = cancelToken.clone();
             let taskEventSender = eventSender.clone();
             let taskClients = Arc::clone(&clients);
             tokio::spawn(async move {
+              eprintln!("[DEBUG] Spawning handle_client_gui for {}", addr);
               handle_client_gui(taskCancelToken, taskEventSender, taskClients, stream, addr, format).await;
             });
           }

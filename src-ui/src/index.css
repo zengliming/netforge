@@ -195,3 +195,74 @@ input::placeholder, textarea::placeholder {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* App header styles */
+.app-header {
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  height: 48px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.app-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--accent-primary);
+  margin-right: 24px;
+}
+
+.main-tabs {
+  display: flex;
+  gap: 4px;
+}
+
+.main-tab {
+  padding: 8px 20px;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.2s;
+  font-size: 14px;
+}
+
+.main-tab:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.main-tab.active {
+  background: var(--accent-primary);
+  color: white;
+  font-weight: 500;
+}
+
+/* Status colors */
+.status-dot {
+  font-size: 10px;
+}
+
+.status-running {
+  color: var(--accent-success);
+}
+
+.status-stopped {
+  color: var(--text-muted);
+}
+
+.status-error {
+  color: var(--accent-error);
+}
+
+/* Message direction colors */
+.msg-in {
+  color: var(--accent-primary);
+}
+
+.msg-out {
+  color: var(--accent-success);
+}
+
