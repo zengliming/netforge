@@ -12,6 +12,19 @@
 
 ## 安装
 
+### 前置要求
+
+- Rust 1.70+
+- Node.js 18+ (GUI 模式)
+- pnpm (推荐)
+- Tauri CLI (GUI 模式)
+
+### 安装 Tauri CLI
+
+```bash
+cargo install tauri-cli --version "^2" --locked
+```
+
 ### 从源码构建
 
 ```bash
@@ -22,9 +35,36 @@ cd netforge
 # 构建 CLI 版本
 cargo build --release
 
-# 构建 GUI 版本 (需要安装 pnpm)
+# 构建 GUI 版本
+# 1. 安装前端依赖
 cd src-ui && pnpm install && cd ..
+
+# 2. 开发模式运行
+cargo tauri dev
+
+# 3. 构建发布版本
 cargo tauri build
+```
+
+### 平台依赖
+
+**macOS:**
+- Xcode Command Line Tools: `xcode-select --install`
+
+**Windows:**
+- Microsoft Edge WebView2 (Windows 10/11 已预装)
+- Microsoft Visual Studio C++ Build Tools
+
+**Linux:**
+```bash
+# Debian/Ubuntu
+sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
+
+# Arch Linux
+sudo pacman -S webkit2gtk-4.1 gtk3 libayatana-appindicator librsvg
+
+# Fedora
+sudo dnf install webkit2gtk4.1-devel gtk3-devel libappindicator-gtk3-devel librsvg2-devel
 ```
 
 ## 使用
@@ -52,7 +92,15 @@ netforge -c config.toml proxy
 ### GUI 模式
 
 ```bash
-netforge --gui
+# 开发模式 (需要先启动前端开发服务器)
+cd src-ui && pnpm dev &
+cargo tauri dev
+
+# 或者直接运行已构建的应用
+cargo tauri build
+# macOS: open src-tauri/target/release/bundle/macos/NetForge.app
+# Windows: src-tauri/target/release/netforge.exe
+# Linux: src-tauri/target/release/netforge
 ```
 
 ### 数据格式
@@ -94,6 +142,8 @@ netforge/
 
 ## 开发
 
+### CLI 开发
+
 ```bash
 # 运行测试
 cargo test
@@ -104,15 +154,38 @@ cargo clippy
 # 格式化
 cargo fmt
 
-# 开发模式运行 GUI
-cargo tauri dev
+# 运行 CLI
+cargo run -- proxy --listen 127.0.0.1:8080 --target 127.0.0.1:9000
 ```
 
-## 依赖
+### GUI 开发
 
-- Rust 1.70+
-- Node.js 18+ (GUI 模式)
-- pnpm (推荐)
+```bash
+# 1. 安装前端依赖
+cd src-ui && pnpm install && cd ..
+
+# 2. 启动前端开发服务器 (终端 1)
+cd src-ui && pnpm dev
+
+# 3. 启动 Tauri 开发模式 (终端 2)
+cargo tauri dev
+
+# 4. 构建发布版本
+cargo tauri build
+```
+
+## 技术栈
+
+| 层 | 技术 |
+|------|------|
+| 后端 | Rust 2021 + Tokio + Tauri 2.0 |
+| 前端 | React 19 + TypeScript + Vite |
+| TLS | rustls |
+| CLI | clap |
+
+## 许可证
+
+MIT
 
 ## 许可证
 
