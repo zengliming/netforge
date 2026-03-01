@@ -20,3 +20,4 @@ netforge = { path = ".." }
 # 异步运行时（与 CLI 同步）
 tokio = { version = "1", features = ["full"] }
 tokio-util = { version = "0.7", features = ["rt"] }
+tauri-plugin-store = "2.4.2"

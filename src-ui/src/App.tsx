@@ -12,6 +12,8 @@ import type {
   Message, 
   DataFormat 
 } from './types';
+
+import { loadState, saveState } from './utils/storage';
 import './App.css';
 
 type TabType = 'proxy' | 'server' | 'client';
@@ -49,6 +51,8 @@ function App() {
   const listenersSetup = useRef(false);
   const cleanupFns = useRef<(() => void)[]>([]);
 
+  const [isInitialStateLoaded, setIsInitialStateLoaded] = useState(false);
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   // Generate unique ID
   const generateId = () => `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
@@ -160,6 +164,57 @@ function App() {
     };
   }, []); // 空依赖数组，只在挂载时执行一次
 
+  // 加载持久化状态（挂载时执行）
+  useEffect(() => {
+    if (isInitialStateLoaded) return;
+
+    const loadInitialState = async () => {
+      try {
+        const state = await loadState();
+        setProxyInstances(state.proxyInstances);
+        setServerInstances(state.serverInstances);
+        setClientInstances(state.clientInstances);
+        setIsInitialStateLoaded(true);
+        addLog('已加载保存的状态');
+      } catch (error) {
+        console.error('加载状态失败:', error);
+        setIsInitialStateLoaded(true);
+        addLog('加载状态失败');
+      }
+    };
+
+    loadInitialState();
+  }, [isInitialStateLoaded]);
+
+  // 保存状态（实例变化时执行，带防抖）
+  useEffect(() => {
+    if (!isInitialStateLoaded) return;
+
+    const save = async () => {
+      try {
+        await saveState({
+          proxyInstances,
+          serverInstances,
+          clientInstances,
+        });
+        addLog('状态已保存');
+      } catch (error) {
+        console.error('保存状态失败:', error);
+        addLog('保存状态失败');
+      }
+    };
+
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+    saveTimeoutRef.current = setTimeout(save, 500);
+
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, [proxyInstances, serverInstances, clientInstances, isInitialStateLoaded]);
   // Proxy handlers
   const handleAddProxy = () => {
     const newInstance: ProxyInstance = {
