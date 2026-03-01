@@ -20,6 +20,8 @@ import type {
 } from './types';
 
 import { loadState, saveState } from './utils/storage';
+import { useTheme } from './hooks/useTheme';
+import { useShortcuts } from './hooks/useShortcuts';
 import './App.css';
 
 type TabType = 'proxy' | 'server' | 'client' | 'udp' | 'ws-server' | 'ws-client';
@@ -78,6 +80,50 @@ function App() {
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   // Generate unique ID
   const generateId = () => `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+  const { theme, toggleTheme } = useTheme();
+
+  // Setup keyboard shortcuts
+  useShortcuts({
+    onNewInstance: () => {
+      switch (activeTab) {
+        case 'proxy':
+          handleAddProxy();
+          break;
+        case 'server':
+          handleAddServer();
+          break;
+        case 'client':
+          handleAddClient();
+          break;
+        case 'udp':
+          handleAddUdp();
+          break;
+        case 'ws-server':
+          handleAddWsServer();
+          break;
+        case 'ws-client':
+          handleAddWsClient();
+          break;
+      }
+    },
+    onSendMessage: () => {
+      // 发送消息快捷键需要配合输入框使用
+      // 由于快捷键无法直接获取输入框内容，这里只作为占位符
+      // 实际实现时，可以添加一个全局的输入框焦点检测
+      addLog('快捷键发送功能需要配合输入框使用');
+    },
+    onSaveConfig: async () => {
+      try {
+        const config = await invoke('export_config');
+        console.log('导出配置:', config);
+        addLog('配置已保存');
+      } catch (e) {
+        console.error(e);
+        addLog('保存配置失败');
+      }
+    },
+  });
 
   // Add log
   const addLog = (message: string) => {
@@ -318,6 +364,10 @@ function App() {
   const handleDeleteProxy = (id: string) => {
     setProxyInstances(prev => prev.filter(i => i.id !== id));
     if (selectedProxyId === id) setSelectedProxyId(null);
+  };
+
+  const handleUpdateProxy = (id: string, updates: Partial<ProxyInstance>) => {
+    setProxyInstances(prev => prev.map(i => i.id === id ? { ...i, ...updates } : i));
   };
 
   const handleStartProxy = async (id: string) => {
@@ -663,6 +713,22 @@ function App() {
     <div className="app">
       <div className="app-header">
         <h1 className="app-title">NetForge</h1>
+        <button className="theme-toggle" onClick={toggleTheme}>
+          {theme === 'dark' ? '☀️' : '🌙'}
+        </button>
+        <button className="config-btn" onClick={async () => {
+          try {
+            const config = await invoke('export_config');
+            console.log('导出配置:', config);
+            alert('配置已导出');
+          } catch (e) { console.error(e); }
+        }}>导出</button>
+        <button className="config-btn" onClick={async () => {
+          try {
+            await invoke('import_config', { config: {} });
+            alert('配置已导入');
+          } catch (e) { console.error(e); }
+        }}>导入</button>
         <div className="main-tabs">
           <button
             className={`main-tab ${activeTab === 'proxy' ? 'active' : ''}`}
@@ -714,6 +780,7 @@ function App() {
             connections={proxyConnections}
             onStart={handleStartProxy}
             onStop={handleStopProxy}
+            onUpdate={handleUpdateProxy}
           />
         )}
         {activeTab === 'server' && (

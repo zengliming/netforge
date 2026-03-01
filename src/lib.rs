@@ -1,11 +1,7 @@
-//! NetForge 库 - 共享模块
+//! NetForge 库 - GUI 共享模块
 //!
-//! 供 CLI 和 Tauri GUI 共享使用
-//! NetForge 库 - 共享模块
-//!
-//! 供 CLI 和 Tauri GUI 共享使用
+//! 供 Tauri GUI 使用
 
-pub mod cli;
 pub mod config;
 pub mod error;
 pub mod events;
@@ -15,7 +11,6 @@ pub mod state;
 pub mod udp;
 pub mod ws;
 
-#[cfg(feature = "tauri")]
 pub mod tauri_commands;
 
 // 重新导出常用类型

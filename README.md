@@ -1,6 +1,6 @@
 # NetForge
 
-网络调试工具集：TCP/TLS 代理 + Socket 调试器
+#ZN|GUI 网络调试工具：TCP/TLS 代理 + Socket 调试器
 
 ## 功能
 
@@ -14,10 +14,9 @@
 
 ### 前置要求
 
-- Rust 1.70+
-- Node.js 18+ (GUI 模式)
-- pnpm (推荐)
-- Tauri CLI (GUI 模式)
+#VM|- Rust 1.70+
+#SV|- Node.js 18+
+#JB|- pnpm (推荐)
 
 ### 安装 Tauri CLI
 
@@ -32,10 +31,7 @@ cargo install tauri-cli --version "^2" --locked
 git clone https://github.com/yourname/netforge.git
 cd netforge
 
-# 构建 CLI 版本
-cargo build --release
-
-# 构建 GUI 版本
+#PB|# 构建 GUI 版本
 # 1. 安装前端依赖
 cd src-ui && pnpm install && cd ..
 
@@ -69,27 +65,7 @@ sudo dnf install webkit2gtk4.1-devel gtk3-devel libappindicator-gtk3-devel librs
 
 ## 使用
 
-### CLI 模式
-
-```bash
-# TCP 代理
-netforge proxy --listen 127.0.0.1:8080 --target 127.0.0.1:9000
-
-# TLS 代理
-netforge proxy --listen 127.0.0.1:8443 --target 127.0.0.1:9000 \
-  --tls --cert ./certs/server.crt --key ./certs/server.key
-
-# Socket 客户端
-netforge socket client --connect 127.0.0.1:9999 --format hex
-
-# Socket 服务端
-netforge socket server --listen 127.0.0.1:8888 --format json
-
-# 使用配置文件
-netforge -c config.toml proxy
-```
-
-### GUI 模式
+#WY|### GUI 模式
 
 ```bash
 # 开发模式 (需要先启动前端开发服务器)
@@ -127,38 +103,21 @@ key_path = "./certs/server.key"
 default_format = "text"  # hex, text, json
 ```
 
-## 项目结构
+#WZ|## 项目结构
 
-```
-netforge/
-├── src/                # Rust 核心代码
-│   ├── cli.rs          # CLI 命令定义
-│   ├── proxy/          # TCP/TLS 代理模块
-│   └── socket/         # Socket 调试模块
-├── src-tauri/          # Tauri 后端
-├── src-ui/             # React 前端
-└── config.example.toml # 配置示例
-```
+#KB|```
+#XT|netforge/
+#QT|├── src/                # Rust 核心代码
+#NM|│   ├── proxy/          # TCP/TLS 代理模块
+#QW|│   └── socket/         # Socket 调试模块
+#WV|├── src-tauri/          # Tauri 后端
+#JV|├── src-ui/             # React 前端
+#KR|└── config.example.toml # 配置示例
+#RM|```
 
-## 开发
+#HW|## 开发
 
-### CLI 开发
-
-```bash
-# 运行测试
-cargo test
-
-# 代码检查
-cargo clippy
-
-# 格式化
-cargo fmt
-
-# 运行 CLI
-cargo run -- proxy --listen 127.0.0.1:8080 --target 127.0.0.1:9000
-```
-
-### GUI 开发
+#KK|### GUI 开发
 
 ```bash
 # 1. 安装前端依赖
@@ -176,17 +135,10 @@ cargo tauri build
 
 ## 技术栈
 
-| 层 | 技术 |
-|------|------|
-| 后端 | Rust 2021 + Tokio + Tauri 2.0 |
-| 前端 | React 19 + TypeScript + Vite |
-| TLS | rustls |
-| CLI | clap |
-
-## 许可证
-
-MIT
-
-## 许可证
-
-MIT
+#TQ|| 层 | 技术 |
+#QZ||------|------|
+#MX|| 后端 | Rust 2021 + Tokio + Tauri 2.0 |
+#VS|| 前端 | React 19 + TypeScript + Vite |
+#HT|| TLS | rustls |
+#RS|
+#BT|

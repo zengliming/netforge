@@ -11,6 +11,7 @@ interface ProxyTabProps {
   connections: Connection[];
   onStart: (id: string) => void;
   onStop: (id: string) => void;
+  onUpdate: (id: string, updates: Partial<ProxyInstance>) => void;
 }
 
 export default function ProxyTab({
@@ -22,6 +23,7 @@ export default function ProxyTab({
   connections,
   onStart,
   onStop,
+  onUpdate,
 }: ProxyTabProps) {
   const selectedInstance = instances.find((i) => i.id === selectedId);
 
@@ -68,7 +70,7 @@ export default function ProxyTab({
                 <input
                   type="text"
                   value={selectedInstance.listen}
-                  readOnly
+                  onChange={(e) => onUpdate(selectedInstance.id, { listen: e.target.value })}
                   className="form-input"
                 />
               </div>
@@ -77,7 +79,7 @@ export default function ProxyTab({
                 <input
                   type="text"
                   value={selectedInstance.target}
-                  readOnly
+                  onChange={(e) => onUpdate(selectedInstance.id, { target: e.target.value })}
                   className="form-input"
                 />
               </div>

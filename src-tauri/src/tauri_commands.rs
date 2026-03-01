@@ -127,9 +127,25 @@ pub async fn start_proxy(
         let event_app_handle = app_handle_clone.clone();
         tokio::spawn(async move {
             while let Some(event) = event_receiver.recv().await {
-                // 发射事件到前端
-                if let Err(e) = event_app_handle.emit(&format!("proxy:{}:event", event_instance_id), &event) {
-                    eprintln!("Failed to emit proxy event: {}", e);
+                match &event {
+                    ProxyEvent::NewConnection { id, source, target, .. } => {
+                        let _ = event_app_handle.emit("proxy:connection", serde_json::json!({
+                            "id": id,
+                            "source": source,
+                            "target": target
+                        }));
+                    }
+                    ProxyEvent::DataTransferred { id, bytes_from_client, bytes_from_server } => {
+                        let _ = event_app_handle.emit("proxy:data", serde_json::json!({
+                            "id": id,
+                            "bytesFromClient": bytes_from_client,
+                            "bytesFromServer": bytes_from_server
+                        }));
+                    }
+                    ProxyEvent::ConnectionClosed { id, .. } => {
+                        let _ = event_app_handle.emit("proxy:closed", serde_json::json!({ "id": id }));
+                    }
+                    _ => {}
                 }
                 // 也发射通用事件
                 let _ = event_app_handle.emit("proxy:event", &event);
@@ -953,4 +969,47 @@ mod tests {
     fn test_runtime_state_new() {
         let _state = RuntimeState::new();
     }
+}
+
+// ========== 配置导入导出 ==========
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn export_config() -> Result<serde_json::Value, String> {
+    // 返回空配置结构，前端负责填充实际数据
+    Ok(serde_json::json!({
+        "proxyInstances": [],
+        "serverInstances": [],
+        "clientInstances": [],
+        "wsServerInstances": [],
+        "wsClientInstances": [],
+        "udpInstances": []
+    }))
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn import_config(_config: serde_json::Value) -> Result<(), String> {
+    // 前端负责解析和应用配置
+    Ok(())
+}
+
+// ========== 主题持久化 ==========
+
+use std::sync::OnceLock;
+
+static THEME: OnceLock<std::sync::RwLock<String>> = OnceLock::new();
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn get_theme() -> Result<String, String> {
+    let theme = THEME.get_or_init(|| std::sync::RwLock::new("dark".to_string())).read().unwrap().clone();
+    Ok(theme)
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn set_theme(theme: String) -> Result<(), String> {
+    if theme != "dark" && theme != "light" {
+        return Err("无效的主题值".to_string());
+    }
+    let mut current = THEME.get_or_init(|| std::sync::RwLock::new("dark".to_string())).write().unwrap();
+    *current = theme;
+    Ok(())
 }

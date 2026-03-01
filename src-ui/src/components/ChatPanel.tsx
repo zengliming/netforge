@@ -9,6 +9,7 @@ interface ChatPanelProps {
   onFormatChange: (format: DataFormat) => void;
   placeholder?: string;
   disabled?: boolean;
+  onResend?: (content: string) => void;
 }
 
 export default function ChatPanel({
@@ -18,8 +19,10 @@ export default function ChatPanel({
   onFormatChange,
   placeholder = '输入消息...',
   disabled = false,
+  onResend,
 }: ChatPanelProps) {
   const [input, setInput] = useState('');
+  const [filterPattern, setFilterPattern] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -52,6 +55,9 @@ export default function ChatPanel({
     return content;
   };
 
+  const filteredMessages = filterPattern
+    ? messages.filter(m => m.content.toLowerCase().includes(filterPattern.toLowerCase()))
+    : messages;
   return (
     <div className="chat-panel">
       <div className="chat-toolbar">
@@ -67,11 +73,18 @@ export default function ChatPanel({
           ))}
         </div>
       </div>
+      <input
+        type="text"
+        className="filter-input"
+        placeholder="过滤消息..."
+        value={filterPattern}
+        onChange={e => setFilterPattern(e.target.value)}
+      />
       <div className="chat-messages">
-        {messages.length === 0 ? (
+        {filteredMessages.length === 0 ? (
           <div className="chat-empty">暂无消息</div>
         ) : (
-          messages.map((msg, index) => (
+          filteredMessages.map((msg, index) => (
             <div key={`${msg.timestamp}-${index}`} className={`chat-message ${msg.direction}`}>
               <span className="msg-time">
                 {new Date(msg.timestamp).toLocaleTimeString('zh-CN', { hour12: false })}
@@ -80,6 +93,9 @@ export default function ChatPanel({
               <pre className="msg-content">
                 {format === 'hex' ? formatContent(msg.content, 'hex') : msg.content}
               </pre>
+              {msg.direction === 'out' && onResend && (
+                <button className="resend-btn" onClick={() => onResend(msg.content)}>↺</button>
+              )}
             </div>
           ))
         )}

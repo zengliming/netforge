@@ -1,14 +1,12 @@
 # 共享库模块 (src/)
 
-核心业务逻辑库，CLI 和 GUI 共用。
+核心业务逻辑库，GUI 共用。
 
 ## 结构
 
 ```
 src/
 ├── lib.rs              # 库入口，重导出公共 API
-├── main.rs             # CLI 入口
-├── cli.rs              # clap 命令定义
 ├── config.rs           # TOML 配置解析
 ├── error.rs            # thiserror 错误类型
 ├── events.rs           # GUI 事件类型 (ProxyEvent, SocketEvent)
@@ -29,7 +27,6 @@ src/
 
 | 需求 | 文件 | 关键符号 |
 |------|------|----------|
-| 添加 CLI 命令 | cli.rs | Commands enum |
 | 添加错误类型 | error.rs | ProxyError, SocketError, ConfigError |
 | 添加配置字段 | config.rs | Config struct |
 | 添加 GUI 事件 | events.rs | ProxyEvent, SocketEvent enum |
@@ -56,7 +53,7 @@ pub use tls::run_tls_proxy;
 - `#[serde(skip)]` 标记不可序列化字段（如 `io::Error`）
 
 ### 异步模式
-- 入口：`#[tokio::main]` (CLI) 或 `tokio::spawn` (GUI)
+- 入口：`tokio::spawn` (GUI)
 - 取消：使用 `CancellationToken`
 - 并发：`tokio::select!` 处理多事件源
 
@@ -97,6 +94,6 @@ cargo test --lib  # 仅库测试
 
 ## 注意
 
-1. **lib.rs 存在** - CLI 和 GUI 都依赖此库
+1. **lib.rs 存在** - GUI 依赖此库
 2. **tauri_commands.rs** - 仅在 `tauri` feature 启用时编译
-3. **events.rs** - 仅 GUI 使用，CLI 模式不触发事件
+3. **events.rs** - 仅 GUI 使用
