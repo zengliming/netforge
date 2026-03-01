@@ -1,5 +1,7 @@
 /* 全局变量 */
-:root {
+/* 暗色主题（默认） */
+:root,
+[data-theme="dark"] {
   --bg-primary: #1e1e2e;
   --bg-secondary: #2a2a3e;
   --bg-tertiary: #3a3a4e;
@@ -14,6 +16,24 @@
   --status-error: #f38ba8;
   --msg-in: #89b4fa;
   --msg-out: #a6e3a1;
+}
+
+/* 亮色主题 */
+[data-theme="light"] {
+  --bg-primary: #ffffff;
+  --bg-secondary: #f3f4f6;
+  --bg-tertiary: #e5e7eb;
+  --text-primary: #1f2937;
+  --text-secondary: #6b7280;
+  --text-muted: #9ca3af;
+  --border-color: #e5e7eb;
+  --accent: #3b82f6;
+  --accent-hover: #2563eb;
+  --status-active: #10b981;
+  --status-inactive: #9ca3af;
+  --status-error: #ef4444;
+  --msg-in: #3b82f6;
+  --msg-out: #10b981;
 }
 
 * {

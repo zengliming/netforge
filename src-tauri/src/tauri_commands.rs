@@ -9,6 +9,8 @@ use netforge::proxy::{run_tcp_proxy_with_events, run_tls_proxy_with_events};
 use netforge::socket::format::DataFormat as SocketDataFormat;
 use netforge::socket::{run_socket_client_gui, run_socket_server_gui};
 use netforge::state::{AppStateHandle, ConfigSnapshot, ProxyState};
+use netforge::udp::{run_udp_socket_gui, UdpEvent, UdpSendPacket};
+use netforge::ws::{run_ws_client, run_ws_server, WsClientEvent, WsServerEvent};
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -31,6 +33,18 @@ struct SocketTask {
     string_input_sender: Option<mpsc::Sender<String>>,
 }
 
+struct WsServerTask {
+    cancel_token: CancellationToken,
+    handle: Option<tokio::task::JoinHandle<()>>,
+    input_sender: Option<mpsc::Sender<(SocketAddr, String)>>,
+}
+
+struct UdpTask {
+    cancel_token: CancellationToken,
+    handle: Option<tokio::task::JoinHandle<()>>,
+    input_sender: Option<mpsc::Sender<UdpSendPacket>>,
+}
+
 /// 应用运行时状态（支持多实例）
 #[derive(Clone)]
 pub struct RuntimeState {
@@ -40,6 +54,9 @@ pub struct RuntimeState {
     server_tasks: Arc<Mutex<HashMap<String, SocketTask>>>,
     /// Socket 客户端任务（实例 ID -> 任务）
     client_tasks: Arc<Mutex<HashMap<String, SocketTask>>>,
+    ws_server_tasks: Arc<Mutex<HashMap<String, WsServerTask>>>,
+    ws_client_tasks: Arc<Mutex<HashMap<String, SocketTask>>>,
+    udp_tasks: Arc<Mutex<HashMap<String, UdpTask>>>,
 }
 
 impl RuntimeState {
@@ -48,6 +65,9 @@ impl RuntimeState {
             proxy_tasks: Arc::new(Mutex::new(HashMap::new())),
             server_tasks: Arc::new(Mutex::new(HashMap::new())),
             client_tasks: Arc::new(Mutex::new(HashMap::new())),
+            ws_server_tasks: Arc::new(Mutex::new(HashMap::new())),
+            ws_client_tasks: Arc::new(Mutex::new(HashMap::new())),
+            udp_tasks: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 }
@@ -571,6 +591,351 @@ pub async fn save_config(
             _ => DataFormat::Text,
         },
     });
+
+    Ok(())
+}
+
+async fn stop_udp_internal(instance_id: &str, runtime_state: &RuntimeState) {
+    let mut udp_tasks = runtime_state.udp_tasks.lock().await;
+    if let Some(task) = udp_tasks.remove(instance_id) {
+        task.cancel_token.cancel();
+
+        if let Some(handle) = task.handle {
+            tokio::time::timeout(tokio::time::Duration::from_secs(5), handle)
+                .await
+                .ok();
+        }
+    }
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn start_udp(
+    instance_id: String,
+    bind_addr: String,
+    app_handle: tauri::AppHandle,
+    runtime_state: tauri::State<'_, RuntimeState>,
+) -> Result<(), String> {
+    stop_udp_internal(&instance_id, &runtime_state).await;
+
+    let cancel_token = CancellationToken::new();
+    let (event_sender, mut event_receiver) = mpsc::channel::<UdpEvent>(100);
+    let (input_sender, input_receiver) = mpsc::channel::<UdpSendPacket>(100);
+
+    let task_cancel_token = cancel_token.clone();
+    let instance_id_clone = instance_id.clone();
+    let app_handle_clone = app_handle.clone();
+
+    let handle = tokio::spawn(async move {
+        let event_instance_id = instance_id_clone.clone();
+        let event_app_handle = app_handle_clone.clone();
+
+        tokio::spawn(async move {
+            while let Some(event) = event_receiver.recv().await {
+                match event {
+                    UdpEvent::Data {
+                        direction,
+                        remote_addr,
+                        data,
+                        ..
+                    } => {
+                        if let Err(e) = event_app_handle.emit(
+                            "udp:data",
+                            serde_json::json!({
+                                "instance_id": event_instance_id,
+                                "direction": direction,
+                                "remote_addr": remote_addr,
+                                "data": String::from_utf8_lossy(&data).to_string()
+                            }),
+                        ) {
+                            eprintln!("Failed to emit udp:data: {}", e);
+                        }
+                    }
+                    UdpEvent::Error { message, .. } => {
+                        if let Err(e) = event_app_handle.emit(
+                            "udp:error",
+                            serde_json::json!({
+                                "instance_id": event_instance_id,
+                                "message": message,
+                            }),
+                        ) {
+                            eprintln!("Failed to emit udp:error: {}", e);
+                        }
+                    }
+                }
+            }
+        });
+
+        let result = run_udp_socket_gui(
+            task_cancel_token,
+            event_sender,
+            input_receiver,
+            &bind_addr,
+            &instance_id_clone,
+        )
+        .await;
+
+        if let Err(e) = result {
+            eprintln!("UDP error: {}", e);
+        }
+    });
+
+    {
+        let mut udp_tasks = runtime_state.udp_tasks.lock().await;
+        udp_tasks.insert(instance_id, UdpTask {
+            cancel_token,
+            handle: Some(handle),
+            input_sender: Some(input_sender),
+        });
+    }
+
+    Ok(())
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn stop_udp(
+    instance_id: String,
+    runtime_state: tauri::State<'_, RuntimeState>,
+) -> Result<(), String> {
+    stop_udp_internal(&instance_id, &runtime_state).await;
+    Ok(())
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn send_udp(
+    instance_id: String,
+    target_addr: String,
+    data: String,
+    runtime_state: tauri::State<'_, RuntimeState>,
+) -> Result<(), String> {
+    let udp_tasks = runtime_state.udp_tasks.lock().await;
+
+    if let Some(task) = udp_tasks.get(&instance_id) {
+        if let Some(sender) = &task.input_sender {
+            sender
+                .send(UdpSendPacket {
+                    target_addr,
+                    data: data.into_bytes(),
+                })
+                .await
+                .map_err(|e| format!("发送 UDP 数据失败: {}", e))?;
+            return Ok(());
+        }
+    }
+
+    Err("UDP 实例未运行".to_string())
+}
+
+async fn stop_ws_server_internal(instance_id: &str, runtime_state: &RuntimeState) {
+    let mut ws_server_tasks = runtime_state.ws_server_tasks.lock().await;
+    if let Some(task) = ws_server_tasks.remove(instance_id) {
+        task.cancel_token.cancel();
+
+        if let Some(handle) = task.handle {
+            tokio::time::timeout(tokio::time::Duration::from_secs(5), handle)
+                .await
+                .ok();
+        }
+    }
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn start_ws_server(
+    instance_id: String,
+    listen: String,
+    app_handle: tauri::AppHandle,
+    runtime_state: tauri::State<'_, RuntimeState>,
+) -> Result<(), String> {
+    stop_ws_server_internal(&instance_id, &runtime_state).await;
+
+    let cancel_token = CancellationToken::new();
+    let (event_sender, mut event_receiver) = mpsc::channel::<WsServerEvent>(100);
+    let (input_sender, input_receiver) = mpsc::channel::<(SocketAddr, String)>(100);
+
+    let task_cancel_token = cancel_token.clone();
+    let instance_id_clone = instance_id.clone();
+    let app_handle_clone = app_handle.clone();
+
+    let handle = tokio::spawn(async move {
+        let event_app_handle = app_handle_clone.clone();
+
+        tokio::spawn(async move {
+            while let Some(event) = event_receiver.recv().await {
+                if let Err(e) = event_app_handle.emit("ws:event", &event) {
+                    eprintln!("Failed to emit ws:event: {}", e);
+                }
+            }
+        });
+
+        let result = run_ws_server(
+            task_cancel_token,
+            event_sender,
+            input_receiver,
+            &listen,
+            instance_id_clone,
+        )
+        .await;
+        if let Err(e) = result {
+            eprintln!("WebSocket server error: {}", e);
+        }
+    });
+
+    {
+        let mut ws_server_tasks = runtime_state.ws_server_tasks.lock().await;
+        ws_server_tasks.insert(instance_id, WsServerTask {
+            cancel_token,
+            handle: Some(handle),
+            input_sender: Some(input_sender),
+        });
+    }
+
+    Ok(())
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn stop_ws_server(
+    instance_id: String,
+    runtime_state: tauri::State<'_, RuntimeState>,
+) -> Result<(), String> {
+    stop_ws_server_internal(&instance_id, &runtime_state).await;
+    Ok(())
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn send_ws_server_data(
+    session_id: String,
+    data: String,
+    runtime_state: tauri::State<'_, RuntimeState>,
+) -> Result<(), String> {
+    let addr: SocketAddr = session_id.parse().map_err(|e| format!("无效的会话 ID: {}", e))?;
+
+    let ws_server_tasks = runtime_state.ws_server_tasks.lock().await;
+    let mut found = false;
+
+    for task in ws_server_tasks.values() {
+        if let Some(sender) = &task.input_sender {
+            if let Err(e) = sender.send((addr, data.clone())).await {
+                return Err(format!("发送 WebSocket 数据失败: {}", e));
+            }
+
+            found = true;
+            break;
+        }
+    }
+
+    if !found {
+        return Err("WebSocket 服务端未运行".to_string());
+    }
+
+    Ok(())
+}
+
+async fn stop_ws_client_internal(instance_id: &str, runtime_state: &RuntimeState) {
+    let mut ws_client_tasks = runtime_state.ws_client_tasks.lock().await;
+    if let Some(task) = ws_client_tasks.remove(instance_id) {
+        task.cancel_token.cancel();
+
+        if let Some(handle) = task.handle {
+            tokio::time::timeout(tokio::time::Duration::from_secs(5), handle)
+                .await
+                .ok();
+        }
+    }
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn start_ws_client(
+    instance_id: String,
+    server_url: String,
+    app_handle: tauri::AppHandle,
+    runtime_state: tauri::State<'_, RuntimeState>,
+) -> Result<(), String> {
+    stop_ws_client_internal(&instance_id, &runtime_state).await;
+
+    let cancel_token = CancellationToken::new();
+    let (event_sender, mut event_receiver) = mpsc::channel::<WsClientEvent>(100);
+    let (input_sender, input_receiver) = mpsc::channel::<String>(100);
+
+    let task_cancel_token = cancel_token.clone();
+    let instance_id_clone = instance_id.clone();
+    let app_handle_clone = app_handle.clone();
+
+    let handle = tokio::spawn(async move {
+        let event_app_handle = app_handle_clone.clone();
+
+        tokio::spawn(async move {
+            while let Some(mut event) = event_receiver.recv().await {
+                let event_name = match event.event.as_str() {
+                    "ws:connected" => "ws:client:connected",
+                    "ws:disconnected" => "ws:client:disconnected",
+                    "ws:data" => "ws:client:data",
+                    _ => event.event.as_str(),
+                };
+                event.event = event_name.to_string();
+
+                if let Err(e) = event_app_handle.emit("ws:client_event", &event) {
+                    eprintln!("Failed to emit ws:client_event: {}", e);
+                }
+            }
+        });
+
+        let result = run_ws_client(
+            task_cancel_token,
+            event_sender,
+            input_receiver,
+            &server_url,
+            instance_id_clone,
+        )
+        .await;
+
+        if let Err(e) = result {
+            eprintln!("WebSocket client error: {}", e);
+        }
+    });
+
+    {
+        let mut ws_client_tasks = runtime_state.ws_client_tasks.lock().await;
+        ws_client_tasks.insert(instance_id, SocketTask {
+            cancel_token,
+            handle: Some(handle),
+            input_sender: None,
+            string_input_sender: Some(input_sender),
+        });
+    }
+
+    Ok(())
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn stop_ws_client(
+    instance_id: String,
+    runtime_state: tauri::State<'_, RuntimeState>,
+) -> Result<(), String> {
+    stop_ws_client_internal(&instance_id, &runtime_state).await;
+    Ok(())
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn send_ws_client_data(
+    data: String,
+    runtime_state: tauri::State<'_, RuntimeState>,
+) -> Result<(), String> {
+    let ws_client_tasks = runtime_state.ws_client_tasks.lock().await;
+    let mut found = false;
+
+    for task in ws_client_tasks.values() {
+        if let Some(sender) = &task.string_input_sender {
+            if let Err(e) = sender.send(data.clone()).await {
+                return Err(format!("发送 WebSocket 数据失败: {}", e));
+            }
+
+            found = true;
+            break;
+        }
+    }
+
+    if !found {
+        return Err("WebSocket 客户端未运行".to_string());
+    }
 
     Ok(())
 }

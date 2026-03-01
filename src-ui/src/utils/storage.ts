@@ -1,5 +1,5 @@
 import { LazyStore } from '@tauri-apps/plugin-store';
-import type { ProxyInstance, ServerInstance, ClientInstance } from '../types';
+import type { ProxyInstance, ServerInstance, ClientInstance, Message } from '../types';
 
 // 持久化状态接口（不包含 status）
 interface PersistedState {
@@ -112,6 +112,40 @@ export async function clearState(): Promise<void> {
     await s.save();
   } catch (error) {
     console.error('清空状态失败:', error);
+    throw error;
+  }
+}
+
+/**
+ * 加载指定实例的消息
+ * @param instanceId 实例 ID
+ * @returns 消息列表
+ */
+export async function loadMessages(instanceId: string): Promise<Message[]> {
+  try {
+    const s = await initStore();
+    const messages = await s.get<Message[]>(`messages:${instanceId}`);
+    return messages || [];
+  } catch (error) {
+    console.error(`加载消息失败 (instanceId: ${instanceId}):`, error);
+    return [];
+  }
+}
+
+/**
+ * 保存指定实例的消息
+ * @param instanceId 实例 ID
+ * @param messages 消息列表
+ */
+export async function saveMessages(instanceId: string, messages: Message[]): Promise<void> {
+  try {
+    const s = await initStore();
+    // 限制保存最近 100 条消息
+    const limitedMessages = messages.slice(-100);
+    await s.set(`messages:${instanceId}`, limitedMessages);
+    await s.save();
+  } catch (error) {
+    console.error(`保存消息失败 (instanceId: ${instanceId}):`, error);
     throw error;
   }
 }

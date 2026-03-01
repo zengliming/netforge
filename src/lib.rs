@@ -12,6 +12,8 @@ pub mod events;
 pub mod proxy;
 pub mod socket;
 pub mod state;
+pub mod udp;
+pub mod ws;
 
 #[cfg(feature = "tauri")]
 pub mod tauri_commands;

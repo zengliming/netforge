@@ -24,6 +24,11 @@ pub enum ProxyEvent {
         total_bytes_from_client: u64,
         total_bytes_from_server: u64,
     },
+    /// 流量统计
+    Stats {
+        id: String,
+        stats: TrafficStats,
+    },
     /// 代理状态变更
     StatusChanged { status: ProxyStatus },
     /// 错误
@@ -70,6 +75,15 @@ pub enum DataFormat {
     Json,
 }
 
+
+/// 流量统计
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TrafficStats {
+    pub bytes_in: u64,
+    pub bytes_out: u64,
+    pub rate_in: f64, // bytes/s
+    pub rate_out: f64, // bytes/s
+}
 /// 连接信息
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConnectionInfo {

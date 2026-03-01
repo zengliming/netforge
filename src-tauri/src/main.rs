@@ -10,6 +10,9 @@ use tauri_commands::{
     start_proxy, stop_proxy, get_proxy_status,
     start_socket_server, stop_socket_server, send_socket_data,
     start_socket_client, stop_socket_client, send_client_data,
+    start_udp, stop_udp, send_udp,
+    start_ws_server, stop_ws_server, send_ws_server_data,
+    start_ws_client, stop_ws_client, send_ws_client_data,
     get_config, save_config,
 };
 
@@ -29,6 +32,15 @@ fn main() {
             start_socket_client,
             stop_socket_client,
             send_client_data,
+            start_udp,
+            stop_udp,
+            send_udp,
+            start_ws_server,
+            stop_ws_server,
+            send_ws_server_data,
+            start_ws_client,
+            stop_ws_client,
+            send_ws_client_data,
     get_config, save_config,
         ])
         .run(tauri::generate_context!())

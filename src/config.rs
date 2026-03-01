@@ -1,18 +1,18 @@
 //! 配置模块
 
 use crate::error::ConfigError;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::fs;
 
 /// 主配置
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Config {
     pub proxy: ProxyConfig,
     pub socket: SocketConfig,
 }
 
 /// 代理配置
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct ProxyConfig {
     /// 监听地址
     pub listen: String,
@@ -23,7 +23,7 @@ pub struct ProxyConfig {
 }
 
 /// TLS 配置
-#[derive(Debug, Deserialize, Clone, Default)]
+#[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct TlsConfig {
     /// 证书文件路径
     pub cert_path: String,
@@ -32,7 +32,7 @@ pub struct TlsConfig {
 }
 
 /// Socket 调试配置
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct SocketConfig {
     /// 默认数据格式: hex, text, json
     #[serde(default = "default_format")]

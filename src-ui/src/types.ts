@@ -27,6 +27,38 @@ export interface ClientInstance {
   status: InstanceStatus;
 }
 
+// UDP 实例
+export interface UdpInstance {
+  id: string;
+  name: string;
+  bindAddr: string;
+  status: InstanceStatus;
+}
+
+// WebSocket 服务端实例
+export interface WsServerInstance {
+  id: string;
+  name: string;
+  listen: string;
+  status: InstanceStatus;
+}
+
+// WebSocket 客户端实例
+export interface WsClientInstance {
+  id: string;
+  name: string;
+  serverUrl: string;
+  status: InstanceStatus;
+}
+
+// 流量统计
+export interface TrafficStats {
+  bytesIn: number;
+  bytesOut: number;
+  rateIn: number; // bytes/s
+  rateOut: number; // bytes/s
+}
+
 // 连接信息
 export interface Connection {
   id: string;
@@ -34,7 +66,9 @@ export interface Connection {
   target: string;
   bytesIn: number;
   bytesOut: number;
+  stats?: TrafficStats;
 }
+
 
 // 消息
 export interface Message {

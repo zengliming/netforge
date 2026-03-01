@@ -4,19 +4,25 @@ import { listen } from '@tauri-apps/api/event';
 import ProxyTab from './components/ProxyTab';
 import ServerTab from './components/ServerTab';
 import ClientTab from './components/ClientTab';
+import UdpTab from './components/UdpTab';
+import WsServerTab from './components/WsServerTab';
+import WsClientTab from './components/WsClientTab';
 import type { 
   ProxyInstance, 
   ServerInstance, 
   ClientInstance, 
   Connection, 
   Message, 
-  DataFormat 
+  DataFormat,
+  UdpInstance,
+  WsServerInstance,
+  WsClientInstance
 } from './types';
 
 import { loadState, saveState } from './utils/storage';
 import './App.css';
 
-type TabType = 'proxy' | 'server' | 'client';
+type TabType = 'proxy' | 'server' | 'client' | 'udp' | 'ws-server' | 'ws-client';
 
 function App() {
   // Tab state
@@ -38,6 +44,23 @@ function App() {
   const [clientInstances, setClientInstances] = useState<ClientInstance[]>([]);
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [clientMessages, setClientMessages] = useState<Message[]>([]);
+  
+  // UDP state
+  const [udpInstances, setUdpInstances] = useState<UdpInstance[]>([]);
+  const [selectedUdpId, setSelectedUdpId] = useState<string | null>(null);
+  const [udpMessages, setUdpMessages] = useState<Message[]>([]);
+  
+  // WebSocket Server state
+  const [wsServerInstances, setWsServerInstances] = useState<WsServerInstance[]>([]);
+  const [selectedWsServerId, setSelectedWsServerId] = useState<string | null>(null);
+  const [wsServerMessages, setWsServerMessages] = useState<Message[]>([]);
+  const [wsServerClients, setWsServerClients] = useState<string[]>([]);
+  const [selectedWsServerClient, setSelectedWsServerClient] = useState<string | null>(null);
+  
+  // WebSocket Client state
+  const [wsClientInstances, setWsClientInstances] = useState<WsClientInstance[]>([]);
+  const [selectedWsClientId, setSelectedWsClientId] = useState<string | null>(null);
+  const [wsClientMessages, setWsClientMessages] = useState<Message[]>([]);
   
   // Format state
   const [format, setFormat] = useState<DataFormat>('text');
@@ -64,24 +87,20 @@ function App() {
   // Setup event listeners (只执行一次)
   useEffect(() => {
     if (listenersSetup.current) {
-      console.log('[DEBUG] Listeners already setup, skipping');
       return;
     }
     
     listenersSetup.current = true;
-    console.log('[DEBUG] Setting up event listeners...');
     
     const setupListeners = async () => {
       try {
         // Socket events - 服务端监听客户端连接
         const unlistenSocketClient = await listen<{ client_addr?: string; instance_id: string }>('socket:client_connected', (event) => {
-          console.log('[DEBUG] socket:client_connected received:', event.payload);
-          // 只有服务端收到的客户端连接才有 client_addr
           const clientAddr = event.payload.client_addr;
           if (clientAddr) {
             setServerClients(prev => {
               if (prev.includes(clientAddr)) {
-                return prev; // 已存在，不添加
+                return prev;
               }
               return [...prev, clientAddr];
             });
@@ -90,7 +109,6 @@ function App() {
         });
 
         const unlistenSocketClientDisconnected = await listen<{ client_addr?: string; instance_id: string }>('socket:client_disconnected', (event) => {
-          console.log('[DEBUG] socket:client_disconnected received:', event.payload);
           const clientAddr = event.payload.client_addr;
           if (clientAddr) {
             setServerClients(prev => prev.filter(c => c !== clientAddr));
@@ -99,14 +117,12 @@ function App() {
         });
 
         const unlistenSocketData = await listen<{ data: string; direction: string; source: string }>('socket:data', (event) => {
-          console.log('[DEBUG] socket:data received:', event.payload);
           const { data, direction, source } = event.payload;
           const msg: Message = {
             direction: direction === 'in' ? 'in' : 'out',
             content: data,
             timestamp: Date.now(),
           };
-          // 根据来源更新对应的消息列表
           if (source === 'server') {
             setServerMessages(prev => [...prev, msg]);
           } else if (source === 'client') {
@@ -116,7 +132,6 @@ function App() {
 
         // 客户端自己的连接状态
         const unlistenSocketConnected = await listen<{ server?: string; instance_id: string }>('socket:connected', (event) => {
-          console.log('[DEBUG] socket:connected received:', event.payload);
           if (event.payload.server) {
             addLog(`已连接到服务器: ${event.payload.server}`);
           }
@@ -141,6 +156,73 @@ function App() {
           addLog(`连接关闭: ${event.payload.id}`);
         });
 
+        // UDP events
+        const unlistenUdpData = await listen<{ direction: string; remote_addr: string; data: string }>('udp:data', (event) => {
+          const { direction, remote_addr, data } = event.payload;
+          const msg: Message = {
+            direction: direction === 'in' ? 'in' : 'out',
+            content: `[${remote_addr}] ${data}`,
+            timestamp: Date.now(),
+          };
+          setUdpMessages(prev => [...prev, msg]);
+        });
+
+        const unlistenUdpError = await listen<{ message: string }>('udp:error', (event) => {
+          addLog(`UDP 错误: ${event.payload.message}`);
+        });
+
+        // WebSocket Server events - 监听通用 ws:event 并解析内嵌事件
+        const unlistenWsServer = await listen<{ event: string; payload: any }>('ws:event', (eventWrapper) => {
+          const { event, payload } = eventWrapper.payload;
+          
+          if (event === 'ws:client_connected') {
+            const clientAddr = payload.client_addr || payload.session_id;
+            if (clientAddr) {
+              setWsServerClients(prev => {
+                if (prev.includes(clientAddr)) return prev;
+                return [...prev, clientAddr];
+              });
+              addLog(`WebSocket 客户端连接: ${clientAddr}`);
+            }
+          } else if (event === 'ws:client_disconnected') {
+            const clientAddr = payload.client_addr || payload.session_id;
+            if (clientAddr) {
+              setWsServerClients(prev => prev.filter(c => c !== clientAddr));
+              addLog(`WebSocket 客户端断开: ${clientAddr}`);
+            }
+          } else if (event === 'ws:data') {
+            const msg: Message = {
+              direction: payload.direction === 'out' ? 'out' : 'in',
+              content: payload.data || '',
+              timestamp: Date.now(),
+            };
+            setWsServerMessages(prev => [...prev, msg]);
+          } else if (event === 'ws:error') {
+            addLog(`WebSocket 错误: ${payload.message}`);
+          }
+        });
+
+        // WebSocket Client events
+        const unlistenWsClient = await listen<{ event: string; payload: any }>('ws:client_event', (eventWrapper) => {
+          const { event, payload } = eventWrapper.payload;
+          
+          if (event === 'ws:client:connected') {
+            addLog('WebSocket 已连接');
+          } else if (event === 'ws:client:disconnected') {
+            addLog('WebSocket 已断开');
+          } else if (event === 'ws:client:data' || event === 'ws:data') {
+            const msg: Message = {
+              direction: payload.direction === 'out' ? 'out' : 'in',
+              content: payload.data || '',
+              timestamp: Date.now(),
+            };
+            setWsClientMessages(prev => [...prev, msg]);
+
+          } else if (event === 'ws:error') {
+            addLog(`WebSocket 错误: ${payload.message}`);
+          }
+        });
+
         cleanupFns.current = [
           unlistenSocketClient,
           unlistenSocketClientDisconnected,
@@ -149,17 +231,21 @@ function App() {
           unlistenConnection,
           unlistenData,
           unlistenClosed,
+          unlistenUdpData,
+          unlistenUdpError,
+          unlistenWsServer,
+          unlistenWsClient,
         ];
-        console.log('[DEBUG] All event listeners set up successfully');
+      
       } catch (e) {
-        console.error('[ERROR] Failed to setup event listeners:', e);
+        const errorMsg = e instanceof Error ? e.message : String(e);
+        console.error('[ERROR] Failed to setup event listeners:', errorMsg);
         listenersSetup.current = false;
       }
     };
     setupListeners();
     
     return () => {
-      console.log('[DEBUG] Cleaning up event listeners');
       cleanupFns.current.forEach(fn => fn());
     };
   }, []); // 空依赖数组，只在挂载时执行一次
@@ -215,7 +301,8 @@ function App() {
       }
     };
   }, [proxyInstances, serverInstances, clientInstances, isInitialStateLoaded]);
-  // Proxy handlers
+
+  // ========== Proxy handlers ==========
   const handleAddProxy = () => {
     const newInstance: ProxyInstance = {
       id: generateId(),
@@ -265,7 +352,7 @@ function App() {
     }
   };
 
-  // Server handlers
+  // ========== Server handlers ==========
   const handleAddServer = () => {
     const newInstance: ServerInstance = {
       id: generateId(),
@@ -323,13 +410,14 @@ function App() {
         session_id: targetClient,
         data: message,
       });
-      setServerMessages(prev => [...prev, { direction: 'out', content: message, timestamp: Date.now() }]);
+      // 不在这里添加消息，等后端返回 socket:data 事件后再添加
     } catch (e) {
-      addLog(`发送失败: ${e}`);
+      const errorMsg = e instanceof Error ? e.message : String(e);
+      addLog(`发送失败: ${errorMsg}`);
     }
   };
 
-  // Client handlers
+  // ========== Client handlers ==========
   const handleAddClient = () => {
     const newInstance: ClientInstance = {
       id: generateId(),
@@ -345,9 +433,11 @@ function App() {
     setClientInstances(prev => prev.filter(i => i.id !== id));
     if (selectedClientId === id) setSelectedClientId(null);
   };
+
   const handleUpdateClient = (id: string, updates: Partial<ClientInstance>) => {
     setClientInstances(prev => prev.map(i => i.id === id ? { ...i, ...updates } : i));
   };
+
   const handleConnectClient = async (id: string) => {
     const instance = clientInstances.find(i => i.id === id);
     if (!instance) return;
@@ -379,11 +469,195 @@ function App() {
   const handleClientSendMessage = async (message: string) => {
     try {
       await invoke('send_client_data', { data: message });
-      setClientMessages(prev => [...prev, { direction: 'out', content: message, timestamp: Date.now() }]);
+      // 不在这里添加消息，等后端返回 socket:data 事件后再添加
+    } catch (e) {
+      const errorMsg = e instanceof Error ? e.message : String(e);
+      addLog(`发送失败: ${errorMsg}`);
+    }
+  };
+
+  // ========== UDP handlers ==========
+  const handleAddUdp = () => {
+    const newInstance: UdpInstance = {
+      id: generateId(),
+      name: `UDP ${udpInstances.length + 1}`,
+      bindAddr: '127.0.0.1:9000',
+      status: 'stopped',
+    };
+    setUdpInstances(prev => [...prev, newInstance]);
+    setSelectedUdpId(newInstance.id);
+  };
+
+  const handleDeleteUdp = (id: string) => {
+    setUdpInstances(prev => prev.filter(i => i.id !== id));
+    if (selectedUdpId === id) setSelectedUdpId(null);
+  };
+
+  const handleUpdateUdp = (id: string, updates: Partial<UdpInstance>) => {
+    setUdpInstances(prev => prev.map(i => i.id === id ? { ...i, ...updates } : i));
+  };
+
+  const handleStartUdp = async (id: string) => {
+    const instance = udpInstances.find(i => i.id === id);
+    if (!instance) return;
+    
+    try {
+      await invoke('start_udp', {
+        instance_id: id,
+        bind_addr: instance.bindAddr,
+      });
+      setUdpInstances(prev => prev.map(i => i.id === id ? { ...i, status: 'running' } : i));
+      addLog(`UDP 已启动: ${instance.bindAddr}`);
+    } catch (e) {
+      setUdpInstances(prev => prev.map(i => i.id === id ? { ...i, status: 'error' } : i));
+      addLog(`UDP 启动失败: ${e}`);
+    }
+  };
+
+  const handleStopUdp = async (id: string) => {
+    try {
+      await invoke('stop_udp', { instance_id: id });
+      setUdpInstances(prev => prev.map(i => i.id === id ? { ...i, status: 'stopped' } : i));
+      addLog('UDP 已停止');
+    } catch (e) {
+      addLog(`停止 UDP 失败: ${e}`);
+    }
+  };
+
+  const handleSendUdp = async (id: string, targetAddr: string, data: string) => {
+    try {
+      await invoke('send_udp', {
+        instance_id: id,
+        target_addr: targetAddr,
+        data: data,
+      });
+      setUdpMessages(prev => [...prev, { direction: 'out', content: `[${targetAddr}] ${data}`, timestamp: Date.now() }]);
+    } catch (e) {
+      addLog(`发送 UDP 失败: ${e}`);
+    }
+  };
+
+  // ========== WebSocket Server handlers ==========
+  const handleAddWsServer = () => {
+    const newInstance: WsServerInstance = {
+      id: generateId(),
+      name: `WS 服务端 ${wsServerInstances.length + 1}`,
+      listen: 'ws://127.0.0.1:8080',
+      status: 'stopped',
+    };
+    setWsServerInstances(prev => [...prev, newInstance]);
+    setSelectedWsServerId(newInstance.id);
+  };
+
+  const handleDeleteWsServer = (id: string) => {
+    setWsServerInstances(prev => prev.filter(i => i.id !== id));
+    if (selectedWsServerId === id) setSelectedWsServerId(null);
+  };
+
+  const handleUpdateWsServer = (id: string, updates: Partial<WsServerInstance>) => {
+    setWsServerInstances(prev => prev.map(i => i.id === id ? { ...i, ...updates } : i));
+  };
+
+  const handleStartWsServer = async (id: string) => {
+    const instance = wsServerInstances.find(i => i.id === id);
+    if (!instance) return;
+    
+    try {
+      await invoke('start_ws_server', {
+        instance_id: id,
+        listen: instance.listen,
+      });
+      setWsServerInstances(prev => prev.map(i => i.id === id ? { ...i, status: 'running' } : i));
+      addLog(`WebSocket 服务端已启动: ${instance.listen}`);
+    } catch (e) {
+      setWsServerInstances(prev => prev.map(i => i.id === id ? { ...i, status: 'error' } : i));
+      addLog(`WebSocket 服务端启动失败: ${e}`);
+    }
+  };
+
+  const handleStopWsServer = async (id: string) => {
+    try {
+      await invoke('stop_ws_server', { instance_id: id });
+      setWsServerInstances(prev => prev.map(i => i.id === id ? { ...i, status: 'stopped' } : i));
+      setWsServerClients([]);
+      setSelectedWsServerClient(null);
+      addLog('WebSocket 服务端已停止');
+    } catch (e) {
+      addLog(`停止 WebSocket 服务端失败: ${e}`);
+    }
+  };
+
+  const handleWsServerSendMessage = async (message: string, targetClient?: string) => {
+    if (!targetClient) return;
+    try {
+      await invoke('send_ws_server_data', {
+        session_id: targetClient,
+        data: message,
+      });
+      // 不在这里添加消息，等后端返回 ws:data 事件后再添加
     } catch (e) {
       addLog(`发送失败: ${e}`);
     }
   };
+
+
+  // ========== WebSocket Client handlers ==========
+  const handleAddWsClient = () => {
+    const newInstance: WsClientInstance = {
+      id: generateId(),
+      name: `WS 客户端 ${wsClientInstances.length + 1}`,
+      serverUrl: 'ws://127.0.0.1:8080',
+      status: 'stopped',
+    };
+    setWsClientInstances(prev => [...prev, newInstance]);
+    setSelectedWsClientId(newInstance.id);
+  };
+
+  const handleDeleteWsClient = (id: string) => {
+    setWsClientInstances(prev => prev.filter(i => i.id !== id));
+    if (selectedWsClientId === id) setSelectedWsClientId(null);
+  };
+
+  const handleUpdateWsClient = (id: string, updates: Partial<WsClientInstance>) => {
+    setWsClientInstances(prev => prev.map(i => i.id === id ? { ...i, ...updates } : i));
+  };
+
+  const handleConnectWsClient = async (id: string) => {
+    const instance = wsClientInstances.find(i => i.id === id);
+    if (!instance) return;
+    
+    try {
+      await invoke('start_ws_client', {
+        instance_id: id,
+        server_url: instance.serverUrl,
+      });
+      setWsClientInstances(prev => prev.map(i => i.id === id ? { ...i, status: 'running' } : i));
+      addLog(`已连接到: ${instance.serverUrl}`);
+    } catch (e) {
+      setWsClientInstances(prev => prev.map(i => i.id === id ? { ...i, status: 'error' } : i));
+      addLog(`连接失败: ${e}`);
+    }
+  };
+
+  const handleDisconnectWsClient = async (id: string) => {
+    try {
+      await invoke('stop_ws_client', { instance_id: id });
+      setWsClientInstances(prev => prev.map(i => i.id === id ? { ...i, status: 'stopped' } : i));
+      addLog('已断开连接');
+    } catch (e) {
+      addLog(`断开失败: ${e}`);
+    }
+  };
+
+  const handleWsClientSendMessage = async (message: string) => {
+    try {
+      await invoke('send_ws_client_data', { data: message });
+      // 不在这里添加消息，等后端返回 ws:data 事件后再添加
+    } catch (e) {
+      addLog(`发送失败: ${e}`);
+    }
+  };
+
 
   return (
     <div className="app">
@@ -407,6 +681,24 @@ function App() {
             onClick={() => setActiveTab('client')}
           >
             客户端
+          </button>
+          <button
+            className={`main-tab ${activeTab === 'udp' ? 'active' : ''}`}
+            onClick={() => setActiveTab('udp')}
+          >
+            UDP
+          </button>
+          <button
+            className={`main-tab ${activeTab === 'ws-server' ? 'active' : ''}`}
+            onClick={() => setActiveTab('ws-server')}
+          >
+            WS 服务端
+          </button>
+          <button
+            className={`main-tab ${activeTab === 'ws-client' ? 'active' : ''}`}
+            onClick={() => setActiveTab('ws-client')}
+          >
+            WS 客户端
           </button>
         </div>
       </div>
@@ -455,6 +747,57 @@ function App() {
             onDisconnect={handleDisconnectClient}
             messages={clientMessages}
             onSendMessage={handleClientSendMessage}
+            format={format}
+            onFormatChange={setFormat}
+          />
+        )}
+        {activeTab === 'udp' && (
+          <UdpTab
+            instances={udpInstances}
+            selectedId={selectedUdpId}
+            onSelect={setSelectedUdpId}
+            onAdd={handleAddUdp}
+            onDelete={handleDeleteUdp}
+            onUpdate={handleUpdateUdp}
+            onStart={handleStartUdp}
+            onStop={handleStopUdp}
+            onSend={handleSendUdp}
+            messages={udpMessages}
+            format={format}
+            onFormatChange={setFormat}
+          />
+        )}
+        {activeTab === 'ws-server' && (
+          <WsServerTab
+            instances={wsServerInstances}
+            selectedId={selectedWsServerId}
+            onSelect={setSelectedWsServerId}
+            onAdd={handleAddWsServer}
+            onDelete={handleDeleteWsServer}
+            onUpdate={handleUpdateWsServer}
+            onStart={handleStartWsServer}
+            onStop={handleStopWsServer}
+            messages={wsServerMessages}
+            onSendMessage={handleWsServerSendMessage}
+            format={format}
+            onFormatChange={setFormat}
+            clients={wsServerClients}
+            selectedClient={selectedWsServerClient}
+            onSelectClient={setSelectedWsServerClient}
+          />
+        )}
+        {activeTab === 'ws-client' && (
+          <WsClientTab
+            instances={wsClientInstances}
+            selectedId={selectedWsClientId}
+            onSelect={setSelectedWsClientId}
+            onAdd={handleAddWsClient}
+            onDelete={handleDeleteWsClient}
+            onUpdate={handleUpdateWsClient}
+            onConnect={handleConnectWsClient}
+            onDisconnect={handleDisconnectWsClient}
+            messages={wsClientMessages}
+            onSendMessage={handleWsClientSendMessage}
             format={format}
             onFormatChange={setFormat}
           />

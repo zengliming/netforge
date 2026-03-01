@@ -9,6 +9,7 @@ pub mod config;
 pub mod error;
 pub mod proxy;
 pub mod socket;
+pub mod udp;
 
 use clap::Parser;
 use cli::{Cli, Commands, SocketCommands};

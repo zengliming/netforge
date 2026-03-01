@@ -1,9 +1,10 @@
 use crate::error::ProxyError;
-use crate::events::ProxyEvent;
+use crate::events::{ProxyEvent, TrafficStats};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::io::{copy_bidirectional, AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::mpsc;
+use tokio::time::{interval, Duration};
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
 
@@ -42,12 +43,40 @@ async fn handle_connection_with_events(
             let mut server_buffer = [0u8; 16 * 1024];
             let mut total_bytes_from_client = 0u64;
             let mut total_bytes_from_server = 0u64;
-
+            let mut last_bytes_from_client = 0u64;
+            let mut last_bytes_from_server = 0u64;
+            let mut stats_interval = interval(Duration::from_secs(1));
+            stats_interval.tick().await; // 跳过第一个立即触发
             loop {
                 tokio::select! {
                     _ = cancel_token.cancelled() => {
                         info!("Connection {} cancelled", connection_id);
                         break;
+                    }
+                    _ = stats_interval.tick() => {
+                        // 计算每秒速率
+                        let bytes_in_delta = total_bytes_from_client - last_bytes_from_client;
+                        let bytes_out_delta = total_bytes_from_server - last_bytes_from_server;
+                        let rate_in = bytes_in_delta as f64; // bytes/s
+                        let rate_out = bytes_out_delta as f64; // bytes/s
+                        
+                        let stats = TrafficStats {
+                            bytes_in: total_bytes_from_client,
+                            bytes_out: total_bytes_from_server,
+                            rate_in,
+                            rate_out,
+                        };
+                        
+                        send_proxy_event(
+                            &event_sender,
+                            ProxyEvent::Stats {
+                                id: connection_id.clone(),
+                                stats,
+                            },
+                        ).await;
+                        
+                        last_bytes_from_client = total_bytes_from_client;
+                        last_bytes_from_server = total_bytes_from_server;
                     }
                     read_from_client = client_reader.read(&mut client_buffer) => {
                         match read_from_client {
