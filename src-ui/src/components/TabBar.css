@@ -1,0 +1,27 @@
+.tab-bar {
+  display: flex;
+  gap: 4px;
+}
+
+.tab-button {
+  padding: 8px 20px;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.2s;
+  font-size: 14px;
+  font-family: inherit;
+}
+
+.tab-button:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.tab-button.active {
+  background: var(--accent);
+  color: var(--bg-primary);
+  font-weight: 500;
+}
