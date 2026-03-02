@@ -1,18 +1,15 @@
 use serde_json;
 
 /// 数据格式类型
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub enum DataFormat {
     Hex,
+    #[default]
     Text,
     Json,
 }
 
-impl Default for DataFormat {
-    fn default() -> Self {
-        DataFormat::Text
-    }
-}
+
 
 impl std::str::FromStr for DataFormat {
     type Err = String;

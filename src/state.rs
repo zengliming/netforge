@@ -3,10 +3,10 @@
 use crate::events::{ConnectionInfo, DataFormat, ProxyStatus, SocketSession};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use tokio::sync::Mutex;
+use tokio::sync::RwLock;
 
 /// 应用全局状态
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct AppState {
     /// 代理状态
     pub proxy: ProxyState,
@@ -36,15 +36,7 @@ pub struct ConfigSnapshot {
     pub socket_format: DataFormat,
 }
 
-impl Default for AppState {
-    fn default() -> Self {
-        Self {
-            proxy: ProxyState::default(),
-            socket_sessions: Vec::new(),
-            config: None,
-        }
-    }
-}
+
 
 impl Default for ProxyState {
     fn default() -> Self {
@@ -58,12 +50,12 @@ impl Default for ProxyState {
 }
 
 /// 线程安全的状态句柄
-pub type AppStateHandle = Arc<Mutex<AppState>>;
+pub type AppStateHandle = Arc<RwLock<AppState>>;
 
 impl AppState {
     /// 创建新的状态句柄
     pub fn new_handle() -> AppStateHandle {
-        Arc::new(Mutex::new(Self::default()))
+        Arc::new(RwLock::new(Self::default()))
     }
 }
 
@@ -90,7 +82,7 @@ mod tests {
     #[test]
     fn test_new_handle() {
         let handle = AppState::new_handle();
-        let state = handle.try_lock().unwrap();
+        let state = handle.try_read().unwrap();
         assert!(state.socket_sessions.is_empty());
     }
 

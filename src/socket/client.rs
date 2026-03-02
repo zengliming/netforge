@@ -150,7 +150,7 @@ pub async fn run_socket_client_gui(
   send_socket_event(
     &event_sender,
     SocketEvent::Disconnected {
-      session_id: session_id,
+      session_id,
     },
   )
   .await;

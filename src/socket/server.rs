@@ -274,7 +274,7 @@ pub async fn run_socket_server(listen: &str, format: DataFormat) -> Result<(), S
     info!("Client connected: {}", addr);
     println!("\n[Client connected: {}]", addr);
 
-    let format = format;
+
     tokio::spawn(async move {
       if let Err(e) = handle_client(stream, addr, format).await {
         error!("Client {} error: {}", addr, e);
@@ -371,7 +371,7 @@ fn parse_hex_data(input: &str) -> Result<Vec<u8>, String> {
     return Ok(Vec::new());
   }
 
-  if cleanedInput.len() % 2 != 0 {
+  if !cleanedInput.len().is_multiple_of(2) {
     return Err("十六进制字符串长度必须是偶数".to_string());
   }
 

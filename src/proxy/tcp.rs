@@ -151,8 +151,8 @@ async fn handle_connection_with_events(
                 &event_sender,
                 ProxyEvent::ConnectionClosed {
                     id: connection_id.clone(),
-                    total_bytes_from_client: total_bytes_from_client,
-                    total_bytes_from_server: total_bytes_from_server,
+                    total_bytes_from_client,
+                    total_bytes_from_server,
                 },
             )
             .await;

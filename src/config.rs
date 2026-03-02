@@ -52,7 +52,7 @@ impl Config {
     }
 
     /// 从字符串解析配置
-    pub fn from_str(content: &str) -> Result<Self, ConfigError> {
+    pub fn parse_str(content: &str) -> Result<Self, ConfigError> {
         let config: Config = toml::from_str(content)?;
         Ok(config)
     }
@@ -87,7 +87,7 @@ target = "127.0.0.1:9000"
 [socket]
 default_format = "text"
 "#;
-        let config = Config::from_str(content).unwrap();
+        let config = Config::parse_str(content).unwrap();
         assert_eq!(config.proxy.listen, "127.0.0.1:8080");
         assert_eq!(config.proxy.target, "127.0.0.1:9000");
         assert_eq!(config.socket.default_format, "text");
@@ -107,7 +107,7 @@ key_path = "./certs/server.key"
 [socket]
 default_format = "json"
 "#;
-        let config = Config::from_str(content).unwrap();
+        let config = Config::parse_str(content).unwrap();
         assert!(config.proxy.tls.is_some());
         let tls = config.proxy.tls.unwrap();
         assert_eq!(tls.cert_path, "./certs/server.crt");

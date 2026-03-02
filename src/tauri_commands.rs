@@ -11,7 +11,9 @@ use crate::state::{AppState, AppStateHandle, ConfigSnapshot};
 #[cfg(feature = "tauri")]
 use std::sync::Arc;
 #[cfg(feature = "tauri")]
-use tokio::sync::Mutex;
+use tracing;
+#[cfg(feature = "tauri")]
+use tokio::sync::RwLock;
 #[cfg(feature = "tauri")]
 use tokio::sync::mpsc;
 #[cfg(feature = "tauri")]
@@ -44,14 +46,14 @@ impl TauriState {
 #[cfg(feature = "tauri")]
 #[tauri::command]
 pub async fn start_proxy(
-    state: tauri::State<'_, Arc<Mutex<TauriState>>>,
+    state: tauri::State<'_, Arc<RwLock<TauriState>>>,
     listen: String,
     target: String,
     tls: bool,
     cert: Option<String>,
     key: Option<String>,
 ) -> Result<(), String> {
-    let mut tauri_state = state.lock().await;
+    let mut tauri_state = state.write().await;
 
     // 检查是否已经在运行
     if tauri_state.proxy_cancel.is_some() {
@@ -67,7 +69,7 @@ pub async fn start_proxy(
 
     // 更新状态
     {
-        let mut app_state = tauri_state.state.lock().await;
+        let mut app_state = tauri_state.state.write().await;
         app_state.proxy.status = ProxyStatus::Running {
             listen: listen.clone(),
             target: target.clone(),
@@ -84,8 +86,8 @@ pub async fn start_proxy(
     // 启动代理任务
     tokio::spawn(async move {
         let result = if tls {
-            let cert_path = cert.ok_or("TLS 模式需要证书路径".to_string()).unwrap();
-            let key_path = key.ok_or("TLS 模式需要私钥路径".to_string()).unwrap();
+            let cert_path = cert.ok_or_else(|| "TLS 模式需要证书路径".to_string())?;
+            let key_path = key.ok_or_else(|| "TLS 模式需要私钥路径".to_string())?;
             crate::proxy::run_tls_proxy_with_events(
                 &listen,
                 &target,
@@ -114,11 +116,11 @@ pub async fn start_proxy(
         }
 
         // 任务结束时清理状态
-        let mut tauri_state = state_for_task.lock().await;
+        let mut tauri_state = state_for_task.write().await;
         tauri_state.proxy_cancel = None;
         tauri_state.proxy_events = None;
         {
-            let mut app_state = tauri_state.state.lock().await;
+            let mut app_state = tauri_state.state.write().await;
             app_state.proxy.status = ProxyStatus::Stopped;
         }
     });
@@ -127,7 +129,7 @@ pub async fn start_proxy(
     let state_for_events = Arc::clone(&state);
     tokio::spawn(async move {
         while let Some(event) = event_receiver.recv().await {
-            let mut tauri_state = state_for_events.lock().await;
+            let mut tauri_state = state_for_events.write().await;
 
             match event {
                 ProxyEvent::NewConnection {
@@ -136,7 +138,7 @@ pub async fn start_proxy(
                     target,
                     timestamp,
                 } => {
-                    let mut app_state = tauri_state.state.lock().await;
+                    let mut app_state = tauri_state.state.write().await;
                     app_state.proxy.connections.push(crate::events::ConnectionInfo {
                         id: id.clone(),
                         source: source.clone(),
@@ -152,7 +154,7 @@ pub async fn start_proxy(
                     bytes_from_client,
                     bytes_from_server,
                 } => {
-                    let mut app_state = tauri_state.state.lock().await;
+                    let mut app_state = tauri_state.state.write().await;
                     app_state.proxy.total_bytes_in = bytes_from_client;
                     app_state.proxy.total_bytes_out = bytes_from_server;
                     if let Some(conn) = app_state.proxy.connections.iter_mut().find(|c| c.id == id) {
@@ -165,7 +167,7 @@ pub async fn start_proxy(
                     total_bytes_from_client,
                     total_bytes_from_server,
                 } => {
-                    let mut app_state = tauri_state.state.lock().await;
+                    let mut app_state = tauri_state.state.write().await;
                     app_state.proxy.total_bytes_in = total_bytes_from_client;
                     app_state.proxy.total_bytes_out = total_bytes_from_server;
                     if let Some(conn) = app_state.proxy.connections.iter_mut().find(|c| c.id == id) {
@@ -175,11 +177,11 @@ pub async fn start_proxy(
                     }
                 }
                 ProxyEvent::StatusChanged { status } => {
-                    let mut app_state = tauri_state.state.lock().await;
+                    let mut app_state = tauri_state.state.write().await;
                     app_state.proxy.status = status;
                 }
                 ProxyEvent::Error { message } => {
-                    eprintln!("代理错误: {}", message);
+                    tracing::error!("代理错误: {}", message);
                 }
             }
         }
@@ -191,8 +193,8 @@ pub async fn start_proxy(
 /// 停止代理
 #[cfg(feature = "tauri")]
 #[tauri::command]
-pub async fn stop_proxy(state: tauri::State<'_, Arc<Mutex<TauriState>>>) -> Result<(), String> {
-    let mut tauri_state = state.lock().await;
+pub async fn stop_proxy(state: tauri::State<'_, Arc<RwLock<TauriState>>>) -> Result<(), String> {
+    let mut tauri_state = state.write().await;
 
     if let Some(cancel_token) = tauri_state.proxy_cancel.take() {
         cancel_token.cancel();
@@ -201,7 +203,7 @@ pub async fn stop_proxy(state: tauri::State<'_, Arc<Mutex<TauriState>>>) -> Resu
     tauri_state.proxy_events = None;
 
     {
-        let mut app_state = tauri_state.state.lock().await;
+        let mut app_state = tauri_state.state.write().await;
         app_state.proxy.status = ProxyStatus::Stopped;
         app_state.proxy.connections.clear();
     }
@@ -213,23 +215,22 @@ pub async fn stop_proxy(state: tauri::State<'_, Arc<Mutex<TauriState>>>) -> Resu
 #[cfg(feature = "tauri")]
 #[tauri::command]
 pub async fn get_proxy_status(
-    state: tauri::State<'_, Arc<Mutex<TauriState>>>,
+    state: tauri::State<'_, Arc<RwLock<TauriState>>>,
 ) -> Result<ProxyStatus, String> {
-    let tauri_state = state.lock().await;
-    let app_state = tauri_state.state.lock().await;
+    let tauri_state = state.read().await;
+    let app_state = tauri_state.state.read().await;
     Ok(app_state.proxy.status.clone())
 }
 
 /// 启动 Socket 服务端
 #[cfg(feature = "tauri")]
 #[tauri::command]
-pub async fn start_socket_server(
-    state: tauri::State<'_, Arc<Mutex<TauriState>>>,
+    pub async fn start_socket_server(
+    state: tauri::State<'_, Arc<RwLock<TauriState>>>,
     listen: String,
     format: String,
 ) -> Result<(), String> {
-    let mut tauri_state = state.lock().await;
-
+    let mut tauri_state = state.write().await;
     // 检查是否已经在运行
     if tauri_state.socket_cancel.is_some() {
         return Err("Socket 服务已在运行中，请先停止".to_string());
@@ -250,7 +251,7 @@ pub async fn start_socket_server(
 
     // 更新状态
     {
-        let mut app_state = tauri_state.state.lock().await;
+        let mut app_state = tauri_state.state.write().await;
         app_state.socket_sessions.clear();
     }
 
@@ -278,7 +279,7 @@ pub async fn start_socket_server(
         }
 
         // 任务结束时清理状态
-        let mut tauri_state = state_for_task.lock().await;
+        let mut tauri_state = state_for_task.write().await;
         tauri_state.socket_cancel = None;
         tauri_state.socket_events = None;
     });
@@ -287,8 +288,8 @@ pub async fn start_socket_server(
     let state_for_events = Arc::clone(&state);
     tokio::spawn(async move {
         while let Some(event) = event_receiver.recv().await {
-            let mut tauri_state = state_for_events.lock().await;
-            let mut app_state = tauri_state.state.lock().await;
+            let mut tauri_state = state_for_events.write().await;
+            let mut app_state = tauri_state.state.write().await;
 
             match event {
                 SocketEvent::Connected {
@@ -316,14 +317,13 @@ pub async fn start_socket_server(
                     data,
                     format,
                 } => {
-                    // 可以在这里记录数据到状态
-                    println!("收到数据 [{}]: {} bytes", session_id, data.len());
+                    // 数据已记录到事件中
                 }
                 SocketEvent::DataSent { session_id, data } => {
-                    println!("发送数据 [{}]: {} bytes", session_id, data.len());
+                    // 数据已记录到事件中
                 }
                 SocketEvent::Error { session_id, message } => {
-                    eprintln!("Socket 错误 [{:?}]: {}", session_id, message);
+                    tracing::error!("Socket 错误 [{:?}]: {}", session_id, message);
                 }
             }
         }
@@ -336,9 +336,9 @@ pub async fn start_socket_server(
 #[cfg(feature = "tauri")]
 #[tauri::command]
 pub async fn stop_socket_server(
-    state: tauri::State<'_, Arc<Mutex<TauriState>>>,
-) -> Result<(), String> {
-    let mut tauri_state = state.lock().await;
+    state: tauri::State<'_, Arc<RwLock<TauriState>>>,
+    ) -> Result<(), String> {
+    let mut tauri_state = state.write().await;
 
     if let Some(cancel_token) = tauri_state.socket_cancel.take() {
         cancel_token.cancel();
@@ -347,7 +347,7 @@ pub async fn stop_socket_server(
     tauri_state.socket_events = None;
 
     {
-        let mut app_state = tauri_state.state.lock().await;
+        let mut app_state = tauri_state.state.write().await;
         app_state.socket_sessions.clear();
     }
 
@@ -358,10 +358,10 @@ pub async fn stop_socket_server(
 #[cfg(feature = "tauri")]
 #[tauri::command]
 pub async fn get_config(
-    state: tauri::State<'_, Arc<Mutex<TauriState>>>,
+    state: tauri::State<'_, Arc<RwLock<TauriState>>>,
 ) -> Result<ConfigSnapshot, String> {
-    let tauri_state = state.lock().await;
-    let app_state = tauri_state.state.lock().await;
+    let tauri_state = state.read().await;
+    let app_state = tauri_state.state.read().await;
     Ok(app_state.config.clone().unwrap_or(ConfigSnapshot {
         proxy_listen: None,
         proxy_target: None,
@@ -373,18 +373,25 @@ pub async fn get_config(
 #[cfg(feature = "tauri")]
 #[tauri::command]
 pub async fn save_config(
-    state: tauri::State<'_, Arc<Mutex<TauriState>>>,
+    state: tauri::State<'_, Arc<RwLock<TauriState>>>,
     config: ConfigSnapshot,
 ) -> Result<(), String> {
-    let mut tauri_state = state.lock().await;
-    let mut app_state = tauri_state.state.lock().await;
+    let mut tauri_state = state.write().await;
+    let mut app_state = tauri_state.state.write().await;
     app_state.config = Some(config);
     Ok(())
 }
 
-// 当没有 Tauri feature 时，提供空实现以便通过测试
+/// 当没有 Tauri feature 时，提供空实现以便通过测试
 #[cfg(not(feature = "tauri"))]
 pub struct TauriState;
+
+#[cfg(not(feature = "tauri"))]
+impl Default for TauriState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 #[cfg(not(feature = "tauri"))]
 impl TauriState {

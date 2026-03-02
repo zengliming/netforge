@@ -23,3 +23,14 @@ rustls-pemfile = "2"
 tokio-util = { version = "0.7", features = ["rt"] }
 tokio-tungstenite = "0.28"
 futures-util = "0.3"
+
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+
+[lints.clippy]
+all = { level = "deny", priority = -1 }
+cast_precision_loss = "warn"
+cast_lossless = "warn"
