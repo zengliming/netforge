@@ -103,7 +103,7 @@ pub async fn start_proxy(
 
     // 更新应用状态
     {
-        let mut state = app_state.lock().await;
+        let mut state = app_state.write().await;
         state.proxy = ProxyState {
             status: ProxyStatus::Running {
                 listen: listen.clone(),
@@ -208,7 +208,7 @@ async fn stop_proxy_internal(
         }
 
         // 更新应用状态
-        let mut state = app_state.lock().await;
+        let mut state = app_state.write().await;
         state.proxy.status = ProxyStatus::Stopped;
     }
 }
@@ -228,7 +228,7 @@ pub async fn stop_proxy(
 /// 获取代理状态
 #[tauri::command]
 pub async fn get_proxy_status(app_state: tauri::State<'_, AppStateHandle>) -> Result<ProxyState, String> {
-    let state = app_state.lock().await;
+    let state = app_state.read().await;
     Ok(state.proxy.clone())
 }
 
@@ -585,7 +585,7 @@ pub async fn send_client_data(
 pub async fn get_config(
     app_state: tauri::State<'_, AppStateHandle>,
 ) -> Result<Option<ConfigSnapshot>, String> {
-    let state = app_state.lock().await;
+    let state = app_state.read().await;
     Ok(state.config.clone())
 }
 
@@ -596,7 +596,7 @@ pub async fn save_config(
     config: Config,
     app_state: tauri::State<'_, AppStateHandle>,
 ) -> Result<(), String> {
-    let mut state = app_state.lock().await;
+    let mut state = app_state.write().await;
     state.config = Some(ConfigSnapshot {
         proxy_listen: Some(config.proxy.listen),
         proxy_target: Some(config.proxy.target),
