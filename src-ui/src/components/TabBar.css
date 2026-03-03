@@ -1,27 +1,43 @@
+/* TabBar with sliding indicator */
+
 .tab-bar {
   display: flex;
-  gap: 4px;
+  gap: var(--space-xs, 4px);
+  position: relative;
 }
 
 .tab-button {
-  padding: 8px 20px;
+  padding: var(--space-sm, 8px) var(--space-lg, 16px);
   background: transparent;
   border: none;
-  color: var(--text-secondary);
+  color: var(--text-secondary, #a1a1aa);
   cursor: pointer;
-  border-radius: 6px;
-  transition: all 0.2s;
+  border-radius: var(--radius-sm, 4px);
+  transition: all var(--transition-fast, 150ms ease);
   font-size: 14px;
   font-family: inherit;
+  position: relative;
+  z-index: 1;
 }
 
 .tab-button:hover {
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
+  background: var(--bg-elevated, #1e1e26);
+  color: var(--text-primary, #ffffff);
 }
 
 .tab-button.active {
-  background: var(--accent);
-  color: var(--bg-primary);
+  color: var(--accent-primary, #3b82f6);
   font-weight: 500;
+}
+
+/* Sliding indicator */
+.tab-indicator {
+  position: absolute;
+  bottom: 0;
+  height: 2px;
+  background: var(--accent-primary, #3b82f6);
+  border-radius: var(--radius-full, 9999px);
+  transition: left var(--transition-normal, 250ms ease),
+              width var(--transition-normal, 250ms ease);
+  box-shadow: 0 0 8px var(--accent-primary, #3b82f6);
 }

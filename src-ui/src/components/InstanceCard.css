@@ -1,63 +1,100 @@
+/* Instance Card */
+
 .instance-card {
-  padding: 12px;
-  background: var(--bg-tertiary);
-  border-radius: 8px;
-  margin-bottom: 8px;
+  padding: var(--space-sm, 8px) var(--space-md, 12px);
+  padding-right: var(--space-xl, 24px); /* Space for delete button */
+  background: var(--bg-surface, #141419);
+  border-radius: var(--radius-md, 8px);
+  margin-bottom: var(--space-sm, 8px);
   cursor: pointer;
-  border: 2px solid transparent;
-  transition: all 0.2s;
+  border: 1px solid var(--border-subtle, #27272a);
+  transition: all var(--transition-normal, 250ms ease);
+  position: relative;
 }
 
 .instance-card:hover {
-  border-color: var(--border-color);
+  transform: scale(1.02);
+  border-color: var(--accent-primary, #3b82f6);
+  background: var(--bg-elevated, #1e1e26);
 }
 
 .instance-card.selected {
-  border-color: var(--accent);
+  border-color: var(--accent-primary, #3b82f6);
 }
 
+/* Header row: status dot + name */
 .instance-header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 4px;
+  gap: var(--space-sm, 8px);
+  margin-bottom: var(--space-xs, 4px);
 }
 
+/* Status dot - pure circle */
 .status-dot {
-  font-size: 10px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  transition: all var(--transition-normal, 250ms ease);
 }
 
+/* Instance name */
 .instance-name {
   flex: 1;
   font-weight: 500;
   font-size: 13px;
+  color: var(--text-primary, #ffffff);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
+/* Status text */
+.instance-status {
+  font-size: 11px;
+  font-weight: 500;
+  margin-bottom: var(--space-xs, 4px);
+  margin-left: 16px; /* Align with name */
+}
+
+/* Info line */
+.instance-info {
+  font-size: 11px;
+  color: var(--text-muted, #6b7280);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-left: 16px; /* Align with name */
+}
+
+/* Delete button - top right corner */
 .delete-btn {
+  position: absolute;
+  top: var(--space-xs, 4px);
+  right: var(--space-xs, 4px);
   width: 20px;
   height: 20px;
   background: transparent;
   border: none;
-  color: var(--text-muted);
+  color: var(--text-muted, #6b7280);
   cursor: pointer;
-  border-radius: 4px;
+  border-radius: var(--radius-sm, 4px);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 16px;
   line-height: 1;
+  transition: all var(--transition-fast, 150ms ease);
+  opacity: 0;
+}
+
+.instance-card:hover .delete-btn {
+  opacity: 0.6;
 }
 
 .delete-btn:hover {
-  background: var(--status-error);
+  background: var(--accent-error, #ef4444);
   color: white;
-}
-
-.instance-info {
-  font-size: 11px;
-  color: var(--text-muted);
-  padding-left: 18px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  opacity: 1;
 }

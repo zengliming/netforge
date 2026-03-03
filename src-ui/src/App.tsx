@@ -713,22 +713,6 @@ function App() {
     <div className="app">
       <div className="app-header">
         <h1 className="app-title">NetForge</h1>
-        <button className="theme-toggle" onClick={toggleTheme}>
-          {theme === 'dark' ? '☀️' : '🌙'}
-        </button>
-        <button className="config-btn" onClick={async () => {
-          try {
-            const config = await invoke('export_config');
-            console.log('导出配置:', config);
-            alert('配置已导出');
-          } catch (e) { console.error(e); }
-        }}>导出</button>
-        <button className="config-btn" onClick={async () => {
-          try {
-            await invoke('import_config', { config: {} });
-            alert('配置已导入');
-          } catch (e) { console.error(e); }
-        }}>导入</button>
         <div className="main-tabs">
           <button
             className={`main-tab ${activeTab === 'proxy' ? 'active' : ''}`}
@@ -765,6 +749,24 @@ function App() {
             onClick={() => setActiveTab('ws-client')}
           >
             WS 客户端
+          </button>
+        </div>
+        <div className="header-actions">
+          <button className="config-btn" onClick={async () => {
+            try {
+              const config = await invoke('export_config');
+              console.log('导出配置:', config);
+              alert('配置已导出');
+            } catch (e) { console.error(e); }
+          }}>导出</button>
+          <button className="config-btn" onClick={async () => {
+            try {
+              await invoke('import_config', { config: {} });
+              alert('配置已导入');
+            } catch (e) { console.error(e); }
+          }}>导入</button>
+          <button className="theme-toggle" onClick={toggleTheme} title="切换主题">
+            {theme === 'dark' ? '☀️' : '🌙'}
           </button>
         </div>
       </div>

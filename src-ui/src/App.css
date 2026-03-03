@@ -1,4 +1,375 @@
-/* 全局变量 */
+/* Global Variables */
+:root,
+[data-theme="dark"] {
+  /* Background */
+  --bg-base: #0a0a0f;
+  --bg-surface: #141419;
+  --bg-elevated: #1e1e26;
+  --bg-overlay: rgba(0,0,0,0.5);
+  
+  /* Text */
+  --text-primary: #ffffff;
+  --text-secondary: #a1a1aa;
+  --text-muted: #6b7280;
+  
+  /* Accent */
+  --accent-primary: #3b82f6;
+  --accent-success: #10b981;
+  --accent-warning: #f59e0b;
+  --accent-error: #ef4444;
+  
+  /* Border */
+  --border-subtle: #27272a;
+  --border-default: #3f3f46;
+  
+  /* Status */
+  --status-running-bg: rgba(16, 185, 129, 0.15);
+  --status-running-border: #10b981;
+  --status-running-text: #10b981;
+  --status-stopped-bg: rgba(107, 114, 128, 0.15);
+  --status-stopped-border: #6b7280;
+  --status-stopped-text: #9ca3af;
+  
+  /* Spacing */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 24px;
+  
+  /* Radius */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
+  --shadow-md: 0 4px 6px rgba(0,0,0,0.3);
+  --shadow-glow: 0 0 20px var(--accent-primary);
+  
+  /* Transitions */
+  --transition-fast: 150ms ease;
+  --transition-normal: 250ms ease;
+  --transition-slow: 350ms ease;
+}
+
+/* Light Theme (Preserved but mapped to new system where possible or kept as legacy for now) */
+[data-theme="light"] {
+  /* Background */
+  --bg-base: #ffffff;
+  --bg-surface: #f3f4f6;
+  --bg-elevated: #e5e7eb;
+  --bg-overlay: rgba(0,0,0,0.2);
+
+  /* Text */
+  --text-primary: #1f2937;
+  --text-secondary: #4b5563;
+  --text-muted: #9ca3af;
+
+  /* Accent */
+  --accent-primary: #3b82f6;
+  --accent-success: #10b981;
+  --accent-warning: #f59e0b;
+  --accent-error: #ef4444;
+
+  /* Border */
+  --border-subtle: #e5e7eb;
+  --border-default: #d1d5db;
+
+  /* Status */
+  --status-running-bg: rgba(16, 185, 129, 0.1);
+  --status-running-border: #10b981;
+  --status-running-text: #059669;
+  --status-stopped-bg: rgba(107, 114, 128, 0.1);
+  --status-stopped-border: #6b7280;
+  --status-stopped-text: #4b5563;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-size: 14px;
+  overflow: hidden;
+}
+
+/* Main Layout */
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: var(--bg-base);
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  padding: 0 var(--space-lg);
+  height: 56px;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.app-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--accent-primary);
+  margin-right: var(--space-xl);
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.main-tabs {
+  display: flex;
+  gap: var(--space-xs);
+  position: relative;
+}
+
+.main-tabs::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  height: 2px;
+  width: 0; /* JS usually controls this, but for CSS-only we might need active state */
+  background: var(--accent-primary);
+  transition: all var(--transition-normal);
+}
+
+.main-tab {
+  padding: var(--space-sm) var(--space-lg);
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
+  font-size: 14px;
+  font-weight: 500;
+  position: relative;
+}
+
+.main-tab:hover {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+}
+
+.main-tab.active {
+  background: var(--bg-elevated);
+  color: var(--accent-primary);
+  font-weight: 600;
+}
+
+/* Header actions - right side */
+.header-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm, 8px);
+}
+
+.theme-toggle {
+  width: 32px;
+  height: 32px;
+  background: var(--bg-elevated, #1e1e26);
+  border: 1px solid var(--border-subtle, #27272a);
+  border-radius: var(--radius-sm, 4px);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  transition: all var(--transition-fast, 150ms ease);
+}
+
+.theme-toggle:hover {
+  background: var(--bg-surface, #141419);
+  border-color: var(--accent-primary, #3b82f6);
+}
+
+.config-btn {
+  padding: var(--space-xs, 4px) var(--space-md, 12px);
+  background: var(--bg-elevated, #1e1e26);
+  border: 1px solid var(--border-subtle, #27272a);
+  border-radius: var(--radius-sm, 4px);
+  color: var(--text-secondary, #a1a1aa);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all var(--transition-fast, 150ms ease);
+}
+
+.config-btn:hover {
+  background: var(--bg-surface, #141419);
+  border-color: var(--accent-primary, #3b82f6);
+  color: var(--text-primary, #ffffff);
+}
+
+.app-content {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+.app-footer {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-surface);
+  border-top: 1px solid var(--border-subtle);
+}
+
+/* Log Area */
+.log-area {
+  height: 200px;
+  min-height: 150px;
+  display: flex;
+  flex-direction: column;
+}
+
+.log-header {
+  padding: var(--space-xs) var(--space-md);
+  font-size: 12px;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-elevated);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.log-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-sm) var(--space-md);
+  font-family: 'SF Mono', Monaco, Consolas, monospace;
+  font-size: 12px;
+  background: var(--bg-base);
+}
+
+.log-entry {
+  margin-bottom: var(--space-xs);
+  line-height: 1.5;
+  display: flex;
+  gap: var(--space-sm);
+}
+
+.log-time {
+  color: var(--text-muted);
+  min-width: 70px;
+}
+
+.log-message {
+  color: var(--text-secondary);
+  word-break: break-all;
+}
+
+/* Status Bar */
+.status-bar {
+  display: flex;
+  align-items: center;
+  padding: var(--space-xs) var(--space-md);
+  background: var(--bg-surface);
+  border-top: 1px solid var(--border-subtle);
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.version {
+  color: var(--text-muted);
+  margin-left: auto;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-default);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* Form Elements */
+select.form-input {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b7280' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 32px;
+  background-color: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  color: var(--text-primary);
+  border-radius: var(--radius-sm);
+  padding: var(--space-xs) var(--space-md);
+  font-size: 14px;
+  transition: all var(--transition-fast);
+}
+
+select.form-input:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+input.form-input {
+  background-color: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  color: var(--text-primary);
+  border-radius: var(--radius-sm);
+  padding: var(--space-xs) var(--space-md);
+  font-size: 14px;
+  transition: all var(--transition-fast);
+}
+
+input.form-input:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+button.btn {
+  padding: var(--space-xs) var(--space-lg);
+  border-radius: var(--radius-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  border: 1px solid transparent;
+}
+
+button.btn-primary {
+  background: var(--accent-primary);
+  color: white;
+}
+
+button.btn-primary:hover {
+  filter: brightness(1.1);
+}
+
+/* Card Hover Effects */
+.instance-card {
+  transition: all var(--transition-normal);
+}
+
+.instance-card:hover {
+  transform: scale(1.02);
+  box-shadow: var(--shadow-glow);
+  border-color: var(--accent-primary);
+  z-index: 1;
+}
 /* 暗色主题（默认） */
 :root,
 [data-theme="dark"] {

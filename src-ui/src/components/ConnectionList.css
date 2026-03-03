@@ -3,7 +3,7 @@
 .connection-list {
   display: flex;
   flex-direction: column;
-  gap: 0.25em;
+  gap: var(--space-xs, 4px);
 }
 
 .connection-list-empty {
@@ -15,33 +15,44 @@
 }
 
 .connection-item {
-  padding: 0.5em;
-  border-radius: 4px;
+  padding: var(--space-sm, 8px);
+  border-radius: var(--radius-sm, 4px);
   cursor: pointer;
-  transition: background-color 0.2s;
+  transition: all var(--transition-fast, 150ms ease);
   border: 1px solid transparent;
+  background: transparent;
 }
 
 .connection-item:hover {
-  background-color: var(--bg-secondary);
+  background-color: var(--bg-elevated, #1e1e26);
+  transform: translateX(2px);
 }
 
 .connection-item.selected {
-  background-color: var(--bg-tertiary);
-  border-color: var(--accent-primary);
+  background-color: var(--bg-elevated, #1e1e26);
+  border-color: var(--accent-primary, #3b82f6);
+  box-shadow: 0 0 8px rgba(59, 130, 246, 0.2);
+}
+
+.connection-item.active {
+  border-left: 2px solid var(--accent-success, #10b981);
+}
+
+.connection-item.closed {
+  opacity: 0.6;
 }
 
 .connection-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 0.25em;
+  margin-bottom: var(--space-xs, 4px);
 }
 
 .connection-source {
   font-weight: 500;
   font-size: 0.875em;
-  color: var(--text-primary);
+  color: var(--text-primary, #ffffff);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -52,21 +63,32 @@
 }
 
 .connection-status.status-active {
-  color: var(--accent-success);
+  color: var(--accent-success, #10b981);
+  text-shadow: 0 0 6px var(--accent-success, #10b981);
 }
 
 .connection-status.status-closed {
-  color: var(--text-muted);
+  color: var(--text-muted, #6b7280);
 }
 
 .connection-target {
-  margin-bottom: 0.25em;
+  margin-bottom: var(--space-xs, 4px);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: 0.75em;
+  color: var(--text-muted, #6b7280);
 }
 
 .connection-stats {
   display: flex;
-  gap: 1em;
+  gap: var(--space-md, 12px);
+  font-size: 0.75em;
+  color: var(--text-muted, #6b7280);
+}
+
+.connection-stats span {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs, 4px);
 }
