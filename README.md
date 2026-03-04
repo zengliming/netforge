@@ -1,6 +1,6 @@
 # NetForge
 
-#ZN|GUI 网络调试工具：TCP/TLS 代理 + Socket 调试器
+GUI 网络调试工具：TCP/TLS 代理 + Socket 调试器
 
 ## 功能
 
@@ -14,9 +14,9 @@
 
 ### 前置要求
 
-#VM|- Rust 1.70+
-#SV|- Node.js 18+
-#JB|- pnpm (推荐)
+- Rust 1.70+
+- Node.js 18+
+- pnpm (推荐)
 
 ### 安装 Tauri CLI
 
@@ -28,10 +28,10 @@ cargo install tauri-cli --version "^2" --locked
 
 ```bash
 # 克隆仓库
-git clone https://github.com/yourname/netforge.git
+git clone https://github.com/zengliming/netforge.git
 cd netforge
 
-#PB|# 构建 GUI 版本
+# 构建 GUI 版本
 # 1. 安装前端依赖
 cd src-ui && pnpm install && cd ..
 
@@ -65,7 +65,7 @@ sudo dnf install webkit2gtk4.1-devel gtk3-devel libappindicator-gtk3-devel librs
 
 ## 使用
 
-#WY|### GUI 模式
+### GUI 模式
 
 ```bash
 # 开发模式 (需要先启动前端开发服务器)
@@ -103,21 +103,21 @@ key_path = "./certs/server.key"
 default_format = "text"  # hex, text, json
 ```
 
-#WZ|## 项目结构
+## 项目结构
 
-#KB|```
-#XT|netforge/
-#QT|├── src/                # Rust 核心代码
-#NM|│   ├── proxy/          # TCP/TLS 代理模块
-#QW|│   └── socket/         # Socket 调试模块
-#WV|├── src-tauri/          # Tauri 后端
-#JV|├── src-ui/             # React 前端
-#KR|└── config.example.toml # 配置示例
-#RM|```
+```
+netforge/
+├── src/                # Rust 核心代码
+│   ├── proxy/          # TCP/TLS 代理模块
+│   └── socket/         # Socket 调试模块
+├── src-tauri/          # Tauri 后端
+├── src-ui/             # React 前端
+└── config.example.toml # 配置示例
+```
 
-#HW|## 开发
+## 开发
 
-#KK|### GUI 开发
+### GUI 开发
 
 ```bash
 # 1. 安装前端依赖
@@ -135,10 +135,8 @@ cargo tauri build
 
 ## 技术栈
 
-#TQ|| 层 | 技术 |
-#QZ||------|------|
-#MX|| 后端 | Rust 2021 + Tokio + Tauri 2.0 |
-#VS|| 前端 | React 19 + TypeScript + Vite |
-#HT|| TLS | rustls |
-#RS|
-#BT|
+| 层 | 技术 |
+|------|------|
+| 后端 | Rust 2021 + Tokio + Tauri 2.0 |
+| 前端 | React 19 + TypeScript + Vite |
+| TLS | rustls |
