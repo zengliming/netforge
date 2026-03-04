@@ -1,8 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import './Layout.css';
 
-interface LayoutProps {}
-
 interface PanelProps {
   title: string;
   collapsible?: boolean;
@@ -29,7 +27,7 @@ function Panel({ title, collapsible = true, defaultExpanded = true, children, cl
   );
 }
 
-export default function Layout(_props: LayoutProps) {
+export default function Layout() {
   return (
     <div className="layout">
       <div className="layout-main">

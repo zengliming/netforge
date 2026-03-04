@@ -25,9 +25,18 @@ export default function ProxyPanel() {
   const [stats, setStats] = useState<ProxyStats>({ connections: 0, bytesIn: 0, bytesOut: 0 });
   const [error, setError] = useState<string | null>(null);
 
+  async function loadStatus() {
+    try {
+      const s = await invoke<ProxyStatus>('get_proxy_status');
+      setStatus(s);
+    } catch (e) {
+      console.error('Failed to load status:', e);
+    }
+  }
+
   useEffect(() => {
     // 加载初始状态
-    loadStatus();
+    void loadStatus();
 
     // 监听代理事件
     const unlistenStatus = listen<ProxyStatus>('proxy:status', (event) => {
@@ -52,15 +61,6 @@ export default function ProxyPanel() {
       unlistenData.then(fn => fn());
     };
   }, []);
-
-  async function loadStatus() {
-    try {
-      const s = await invoke<ProxyStatus>('get_proxy_status');
-      setStatus(s);
-    } catch (e) {
-      console.error('Failed to load status:', e);
-    }
-  }
 
   async function handleStart() {
     setError(null);

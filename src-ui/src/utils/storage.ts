@@ -88,12 +88,12 @@ export async function saveState({
     const s = await initStore();
 
     // 保存时移除 status 字段（仅持久化配置信息）
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const persistedState: PersistedState = {
-      proxyInstances: proxyInstances.map(({ status, ...rest }) => rest),
-      serverInstances: serverInstances.map(({ status, ...rest }) => rest),
-      clientInstances: clientInstances.map(({ status, ...rest }) => rest),
+      proxyInstances: proxyInstances.map(({ status: _status, ...rest }) => rest),
+      serverInstances: serverInstances.map(({ status: _status1, ...rest }) => rest),
+      clientInstances: clientInstances.map(({ status: _status2, ...rest }) => rest),
     };
-
     await s.set('state', persistedState);
     await s.save();
   } catch (error) {

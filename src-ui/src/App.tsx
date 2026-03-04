@@ -68,7 +68,7 @@ function App() {
   const [format, setFormat] = useState<DataFormat>('text');
   
   // Logs
-  const [logs, setLogs] = useState<{ message: string; timestamp: number }[]>([
+  const [logs, setLogs] = useState<{ message: string; timestamp: number }[]>(() => [
     { message: 'NetForge GUI 已启动', timestamp: Date.now() }
   ]);
 
@@ -218,11 +218,11 @@ function App() {
         });
 
         // WebSocket Server events - 监听通用 ws:event 并解析内嵌事件
-        const unlistenWsServer = await listen<{ event: string; payload: any }>('ws:event', (eventWrapper) => {
+        const unlistenWsServer = await listen<{ event: string; payload: Record<string, unknown> }>('ws:event', (eventWrapper) => {
           const { event, payload } = eventWrapper.payload;
           
           if (event === 'ws:client_connected') {
-            const clientAddr = payload.client_addr || payload.session_id;
+            const clientAddr = (payload.client_addr || payload.session_id) as string;
             if (clientAddr) {
               setWsServerClients(prev => {
                 if (prev.includes(clientAddr)) return prev;
@@ -231,7 +231,7 @@ function App() {
               addLog(`WebSocket 客户端连接: ${clientAddr}`);
             }
           } else if (event === 'ws:client_disconnected') {
-            const clientAddr = payload.client_addr || payload.session_id;
+            const clientAddr = (payload.client_addr || payload.session_id) as string;
             if (clientAddr) {
               setWsServerClients(prev => prev.filter(c => c !== clientAddr));
               addLog(`WebSocket 客户端断开: ${clientAddr}`);
@@ -239,17 +239,17 @@ function App() {
           } else if (event === 'ws:data') {
             const msg: Message = {
               direction: payload.direction === 'out' ? 'out' : 'in',
-              content: payload.data || '',
+              content: (payload.data as string) || '',
               timestamp: Date.now(),
             };
             setWsServerMessages(prev => [...prev, msg]);
           } else if (event === 'ws:error') {
-            addLog(`WebSocket 错误: ${payload.message}`);
+            addLog(`WebSocket 错误: ${payload.message as string}`);
           }
         });
 
         // WebSocket Client events
-        const unlistenWsClient = await listen<{ event: string; payload: any }>('ws:client_event', (eventWrapper) => {
+        const unlistenWsClient = await listen<{ event: string; payload: Record<string, unknown> }>('ws:client_event', (eventWrapper) => {
           const { event, payload } = eventWrapper.payload;
           
           if (event === 'ws:client:connected') {
@@ -259,13 +259,12 @@ function App() {
           } else if (event === 'ws:client:data' || event === 'ws:data') {
             const msg: Message = {
               direction: payload.direction === 'out' ? 'out' : 'in',
-              content: payload.data || '',
+              content: (payload.data as string) || '',
               timestamp: Date.now(),
             };
             setWsClientMessages(prev => [...prev, msg]);
-
           } else if (event === 'ws:error') {
-            addLog(`WebSocket 错误: ${payload.message}`);
+            addLog(`WebSocket 错误: ${payload.message as string}`);
           }
         });
 
