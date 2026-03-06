@@ -7,6 +7,8 @@ import ClientTab from './components/ClientTab';
 import UdpTab from './components/UdpTab';
 import WsServerTab from './components/WsServerTab';
 import WsClientTab from './components/WsClientTab';
+import Header from './components/Header';
+import Footer from './components/Footer';
 import type { 
   ProxyInstance, 
   ServerInstance, 
@@ -87,30 +89,16 @@ function App() {
   useShortcuts({
     onNewInstance: () => {
       switch (activeTab) {
-        case 'proxy':
-          handleAddProxy();
-          break;
-        case 'server':
-          handleAddServer();
-          break;
-        case 'client':
-          handleAddClient();
-          break;
-        case 'udp':
-          handleAddUdp();
-          break;
-        case 'ws-server':
-          handleAddWsServer();
-          break;
-        case 'ws-client':
-          handleAddWsClient();
-          break;
+        case 'proxy': handleAddProxy(); break;
+        case 'server': handleAddServer(); break;
+        case 'client': handleAddClient(); break;
+        case 'udp': handleAddUdp(); break;
+        case 'ws-server': handleAddWsServer(); break;
+        case 'ws-client': handleAddWsClient(); break;
       }
     },
     onSendMessage: () => {
       // 发送消息快捷键需要配合输入框使用
-      // 由于快捷键无法直接获取输入框内容，这里只作为占位符
-      // 实际实现时，可以添加一个全局的输入框焦点检测
       addLog('快捷键发送功能需要配合输入框使用');
     },
     onSaveConfig: async () => {
@@ -132,24 +120,16 @@ function App() {
 
   // Setup event listeners (只执行一次)
   useEffect(() => {
-    if (listenersSetup.current) {
-      return;
-    }
-    
+    if (listenersSetup.current) return;
     listenersSetup.current = true;
     
     const setupListeners = async () => {
       try {
-        // Socket events - 服务端监听客户端连接
+        // Socket events
         const unlistenSocketClient = await listen<{ client_addr?: string; instance_id: string }>('socket:client_connected', (event) => {
           const clientAddr = event.payload.client_addr;
           if (clientAddr) {
-            setServerClients(prev => {
-              if (prev.includes(clientAddr)) {
-                return prev;
-              }
-              return [...prev, clientAddr];
-            });
+            setServerClients(prev => prev.includes(clientAddr) ? prev : [...prev, clientAddr]);
             addLog(`客户端连接: ${clientAddr}`);
           }
         });
@@ -164,23 +144,13 @@ function App() {
 
         const unlistenSocketData = await listen<{ data: string; direction: string; source: string }>('socket:data', (event) => {
           const { data, direction, source } = event.payload;
-          const msg: Message = {
-            direction: direction === 'in' ? 'in' : 'out',
-            content: data,
-            timestamp: Date.now(),
-          };
-          if (source === 'server') {
-            setServerMessages(prev => [...prev, msg]);
-          } else if (source === 'client') {
-            setClientMessages(prev => [...prev, msg]);
-          }
+          const msg: Message = { direction: direction === 'in' ? 'in' : 'out', content: data, timestamp: Date.now() };
+          if (source === 'server') setServerMessages(prev => [...prev, msg]);
+          else if (source === 'client') setClientMessages(prev => [...prev, msg]);
         });
 
-        // 客户端自己的连接状态
         const unlistenSocketConnected = await listen<{ server?: string; instance_id: string }>('socket:connected', (event) => {
-          if (event.payload.server) {
-            addLog(`已连接到服务器: ${event.payload.server}`);
-          }
+          if (event.payload.server) addLog(`已连接到服务器: ${event.payload.server}`);
         });
 
         // Proxy events
@@ -192,9 +162,7 @@ function App() {
 
         const unlistenData = await listen<{ id: string; bytesFromClient: number; bytesFromServer: number }>('proxy:data', (event) => {
           const { id, bytesFromClient, bytesFromServer } = event.payload;
-          setProxyConnections(prev => prev.map(c =>
-            c.id === id ? { ...c, bytesIn: c.bytesIn + bytesFromClient, bytesOut: c.bytesOut + bytesFromServer } : c
-          ));
+          setProxyConnections(prev => prev.map(c => c.id === id ? { ...c, bytesIn: c.bytesIn + bytesFromClient, bytesOut: c.bytesOut + bytesFromServer } : c));
         });
 
         const unlistenClosed = await listen<{ id: string }>('proxy:closed', (event) => {
@@ -205,29 +173,20 @@ function App() {
         // UDP events
         const unlistenUdpData = await listen<{ direction: string; remote_addr: string; data: string }>('udp:data', (event) => {
           const { direction, remote_addr, data } = event.payload;
-          const msg: Message = {
-            direction: direction === 'in' ? 'in' : 'out',
-            content: `[${remote_addr}] ${data}`,
-            timestamp: Date.now(),
-          };
-          setUdpMessages(prev => [...prev, msg]);
+          setUdpMessages(prev => [...prev, { direction: direction === 'in' ? 'in' : 'out', content: `[${remote_addr}] ${data}`, timestamp: Date.now() }]);
         });
 
         const unlistenUdpError = await listen<{ message: string }>('udp:error', (event) => {
           addLog(`UDP 错误: ${event.payload.message}`);
         });
 
-        // WebSocket Server events - 监听通用 ws:event 并解析内嵌事件
+        // WebSocket Server events
         const unlistenWsServer = await listen<{ event: string; payload: Record<string, unknown> }>('ws:event', (eventWrapper) => {
           const { event, payload } = eventWrapper.payload;
-          
           if (event === 'ws:client_connected') {
             const clientAddr = (payload.client_addr || payload.session_id) as string;
             if (clientAddr) {
-              setWsServerClients(prev => {
-                if (prev.includes(clientAddr)) return prev;
-                return [...prev, clientAddr];
-              });
+              setWsServerClients(prev => prev.includes(clientAddr) ? prev : [...prev, clientAddr]);
               addLog(`WebSocket 客户端连接: ${clientAddr}`);
             }
           } else if (event === 'ws:client_disconnected') {
@@ -237,12 +196,7 @@ function App() {
               addLog(`WebSocket 客户端断开: ${clientAddr}`);
             }
           } else if (event === 'ws:data') {
-            const msg: Message = {
-              direction: payload.direction === 'out' ? 'out' : 'in',
-              content: (payload.data as string) || '',
-              timestamp: Date.now(),
-            };
-            setWsServerMessages(prev => [...prev, msg]);
+            setWsServerMessages(prev => [...prev, { direction: payload.direction === 'out' ? 'out' : 'in', content: (payload.data as string) || '', timestamp: Date.now() }]);
           } else if (event === 'ws:error') {
             addLog(`WebSocket 错误: ${payload.message as string}`);
           }
@@ -251,54 +205,30 @@ function App() {
         // WebSocket Client events
         const unlistenWsClient = await listen<{ event: string; payload: Record<string, unknown> }>('ws:client_event', (eventWrapper) => {
           const { event, payload } = eventWrapper.payload;
-          
-          if (event === 'ws:client:connected') {
-            addLog('WebSocket 已连接');
-          } else if (event === 'ws:client:disconnected') {
-            addLog('WebSocket 已断开');
-          } else if (event === 'ws:client:data' || event === 'ws:data') {
-            const msg: Message = {
-              direction: payload.direction === 'out' ? 'out' : 'in',
-              content: (payload.data as string) || '',
-              timestamp: Date.now(),
-            };
-            setWsClientMessages(prev => [...prev, msg]);
-          } else if (event === 'ws:error') {
-            addLog(`WebSocket 错误: ${payload.message as string}`);
-          }
+          if (event === 'ws:client:connected') addLog('WebSocket 已连接');
+          else if (event === 'ws:client:disconnected') addLog('WebSocket 已断开');
+          else if (event === 'ws:client:data' || event === 'ws:data') {
+            setWsClientMessages(prev => [...prev, { direction: payload.direction === 'out' ? 'out' : 'in', content: (payload.data as string) || '', timestamp: Date.now() }]);
+          } else if (event === 'ws:error') addLog(`WebSocket 错误: ${payload.message as string}`);
         });
 
         cleanupFns.current = [
-          unlistenSocketClient,
-          unlistenSocketClientDisconnected,
-          unlistenSocketData,
-          unlistenSocketConnected,
-          unlistenConnection,
-          unlistenData,
-          unlistenClosed,
-          unlistenUdpData,
-          unlistenUdpError,
-          unlistenWsServer,
-          unlistenWsClient,
+          unlistenSocketClient, unlistenSocketClientDisconnected, unlistenSocketData, unlistenSocketConnected,
+          unlistenConnection, unlistenData, unlistenClosed, unlistenUdpData, unlistenUdpError,
+          unlistenWsServer, unlistenWsClient,
         ];
-      
       } catch (e) {
-        const errorMsg = e instanceof Error ? e.message : String(e);
-        console.error('[ERROR] Failed to setup event listeners:', errorMsg);
+        console.error('[ERROR] Failed to setup event listeners:', e);
         listenersSetup.current = false;
       }
     };
     setupListeners();
-    
-    return () => {
-      cleanupFns.current.forEach(fn => fn());
-    };
-  }, []); // 空依赖数组，只在挂载时执行一次
+    return () => cleanupFns.current.forEach(fn => fn());
+  }, []);
 
-  // 加载持久化状态（挂载时执行）
+  // 加载持久化状态
   useEffect(() => {
     if (isInitialStateLoaded) return;
-
     const loadInitialState = async () => {
       try {
         const state = await loadState();
@@ -313,75 +243,44 @@ function App() {
         addLog('加载状态失败');
       }
     };
-
     loadInitialState();
   }, [isInitialStateLoaded]);
 
-  // 保存状态（实例变化时执行，带防抖）
+  // 保存状态
   useEffect(() => {
     if (!isInitialStateLoaded) return;
-
     const save = async () => {
       try {
-        await saveState({
-          proxyInstances,
-          serverInstances,
-          clientInstances,
-        });
+        await saveState({ proxyInstances, serverInstances, clientInstances });
         addLog('状态已保存');
       } catch (error) {
         console.error('保存状态失败:', error);
         addLog('保存状态失败');
       }
     };
-
-    if (saveTimeoutRef.current) {
-      clearTimeout(saveTimeoutRef.current);
-    }
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     saveTimeoutRef.current = setTimeout(save, 500);
-
-    return () => {
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-      }
-    };
+    return () => { if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current); };
   }, [proxyInstances, serverInstances, clientInstances, isInitialStateLoaded]);
 
-  // ========== Proxy handlers ==========
+  // ========== Handlers ==========
   const handleAddProxy = () => {
-    const newInstance: ProxyInstance = {
-      id: generateId(),
-      name: `代理 ${proxyInstances.length + 1}`,
-      listen: '127.0.0.1:8080',
-      target: '127.0.0.1:9000',
-      status: 'stopped',
-    };
+    const newInstance: ProxyInstance = { id: generateId(), name: `代理 ${proxyInstances.length + 1}`, listen: '127.0.0.1:8080', target: '127.0.0.1:9000', status: 'stopped' };
     setProxyInstances(prev => [...prev, newInstance]);
     setSelectedProxyId(newInstance.id);
   };
-
   const handleDeleteProxy = (id: string) => {
     setProxyInstances(prev => prev.filter(i => i.id !== id));
     if (selectedProxyId === id) setSelectedProxyId(null);
   };
-
   const handleUpdateProxy = (id: string, updates: Partial<ProxyInstance>) => {
     setProxyInstances(prev => prev.map(i => i.id === id ? { ...i, ...updates } : i));
   };
-
   const handleStartProxy = async (id: string) => {
     const instance = proxyInstances.find(i => i.id === id);
     if (!instance) return;
-    
     try {
-      await invoke('start_proxy', {
-        instance_id: id,
-        listen: instance.listen,
-        target: instance.target,
-        tls: false,
-        cert: null,
-        key: null,
-      });
+      await invoke('start_proxy', { instance_id: id, listen: instance.listen, target: instance.target, tls: false, cert: null, key: null });
       setProxyInstances(prev => prev.map(i => i.id === id ? { ...i, status: 'running' } : i));
       addLog(`代理已启动: ${instance.listen} -> ${instance.target}`);
     } catch (e) {
@@ -389,49 +288,32 @@ function App() {
       addLog(`代理启动失败: ${e}`);
     }
   };
-
   const handleStopProxy = async (id: string) => {
     try {
       await invoke('stop_proxy', { instance_id: id });
       setProxyInstances(prev => prev.map(i => i.id === id ? { ...i, status: 'stopped' } : i));
       setProxyConnections([]);
       addLog('代理已停止');
-    } catch (e) {
-      addLog(`停止代理失败: ${e}`);
-    }
+    } catch (e) { addLog(`停止代理失败: ${e}`); }
   };
 
-  // ========== Server handlers ==========
   const handleAddServer = () => {
-    const newInstance: ServerInstance = {
-      id: generateId(),
-      name: `服务端 ${serverInstances.length + 1}`,
-      listen: '127.0.0.1:8888',
-      status: 'stopped',
-    };
+    const newInstance: ServerInstance = { id: generateId(), name: `服务端 ${serverInstances.length + 1}`, listen: '127.0.0.1:8888', status: 'stopped' };
     setServerInstances(prev => [...prev, newInstance]);
     setSelectedServerId(newInstance.id);
   };
-
   const handleDeleteServer = (id: string) => {
     setServerInstances(prev => prev.filter(i => i.id !== id));
     if (selectedServerId === id) setSelectedServerId(null);
   };
-
   const handleUpdateServer = (id: string, updates: Partial<ServerInstance>) => {
     setServerInstances(prev => prev.map(i => i.id === id ? { ...i, ...updates } : i));
   };
-
   const handleStartServer = async (id: string) => {
     const instance = serverInstances.find(i => i.id === id);
     if (!instance) return;
-    
     try {
-      await invoke('start_socket_server', {
-        instance_id: id,
-        listen: instance.listen,
-        format: format,
-      });
+      await invoke('start_socket_server', { instance_id: id, listen: instance.listen, format: format });
       setServerInstances(prev => prev.map(i => i.id === id ? { ...i, status: 'running' } : i));
       addLog(`服务端已启动: ${instance.listen}`);
     } catch (e) {
@@ -439,7 +321,6 @@ function App() {
       addLog(`服务端启动失败: ${e}`);
     }
   };
-
   const handleStopServer = async (id: string) => {
     try {
       await invoke('stop_socket_server', { instance_id: id });
@@ -447,56 +328,31 @@ function App() {
       setServerClients([]);
       setSelectedServerClient(null);
       addLog('服务端已停止');
-    } catch (e) {
-      addLog(`停止服务端失败: ${e}`);
-    }
+    } catch (e) { addLog(`停止服务端失败: ${e}`); }
   };
-
   const handleServerSendMessage = async (message: string, targetClient?: string) => {
     if (!targetClient) return;
-    try {
-      await invoke('send_socket_data', {
-        session_id: targetClient,
-        data: message,
-      });
-      // 不在这里添加消息，等后端返回 socket:data 事件后再添加
-    } catch (e) {
-      const errorMsg = e instanceof Error ? e.message : String(e);
-      addLog(`发送失败: ${errorMsg}`);
-    }
+    try { await invoke('send_socket_data', { session_id: targetClient, data: message }); } 
+    catch (e) { addLog(`发送失败: ${e}`); }
   };
 
-  // ========== Client handlers ==========
   const handleAddClient = () => {
-    const newInstance: ClientInstance = {
-      id: generateId(),
-      name: `客户端 ${clientInstances.length + 1}`,
-      server: '127.0.0.1:8888',
-      status: 'stopped',
-    };
+    const newInstance: ClientInstance = { id: generateId(), name: `客户端 ${clientInstances.length + 1}`, server: '127.0.0.1:8888', status: 'stopped' };
     setClientInstances(prev => [...prev, newInstance]);
     setSelectedClientId(newInstance.id);
   };
-
   const handleDeleteClient = (id: string) => {
     setClientInstances(prev => prev.filter(i => i.id !== id));
     if (selectedClientId === id) setSelectedClientId(null);
   };
-
   const handleUpdateClient = (id: string, updates: Partial<ClientInstance>) => {
     setClientInstances(prev => prev.map(i => i.id === id ? { ...i, ...updates } : i));
   };
-
   const handleConnectClient = async (id: string) => {
     const instance = clientInstances.find(i => i.id === id);
     if (!instance) return;
-    
     try {
-      await invoke('start_socket_client', {
-        instance_id: id,
-        server: instance.server,
-        format: format,
-      });
+      await invoke('start_socket_client', { instance_id: id, server: instance.server, format: format });
       setClientInstances(prev => prev.map(i => i.id === id ? { ...i, status: 'running' } : i));
       addLog(`已连接到: ${instance.server}`);
     } catch (e) {
@@ -504,57 +360,35 @@ function App() {
       addLog(`连接失败: ${e}`);
     }
   };
-
   const handleDisconnectClient = async (id: string) => {
     try {
       await invoke('stop_socket_client', { instance_id: id });
       setClientInstances(prev => prev.map(i => i.id === id ? { ...i, status: 'stopped' } : i));
       addLog('已断开连接');
-    } catch (e) {
-      addLog(`断开失败: ${e}`);
-    }
+    } catch (e) { addLog(`断开失败: ${e}`); }
   };
-
   const handleClientSendMessage = async (message: string) => {
-    try {
-      await invoke('send_client_data', { data: message });
-      // 不在这里添加消息，等后端返回 socket:data 事件后再添加
-    } catch (e) {
-      const errorMsg = e instanceof Error ? e.message : String(e);
-      addLog(`发送失败: ${errorMsg}`);
-    }
+    try { await invoke('send_client_data', { data: message }); } 
+    catch (e) { addLog(`发送失败: ${e}`); }
   };
 
-  // ========== UDP handlers ==========
   const handleAddUdp = () => {
-    const newInstance: UdpInstance = {
-      id: generateId(),
-      name: `UDP ${udpInstances.length + 1}`,
-      bindAddr: '127.0.0.1:9000',
-      status: 'stopped',
-    };
+    const newInstance: UdpInstance = { id: generateId(), name: `UDP ${udpInstances.length + 1}`, bindAddr: '127.0.0.1:9000', status: 'stopped' };
     setUdpInstances(prev => [...prev, newInstance]);
     setSelectedUdpId(newInstance.id);
   };
-
   const handleDeleteUdp = (id: string) => {
     setUdpInstances(prev => prev.filter(i => i.id !== id));
     if (selectedUdpId === id) setSelectedUdpId(null);
   };
-
   const handleUpdateUdp = (id: string, updates: Partial<UdpInstance>) => {
     setUdpInstances(prev => prev.map(i => i.id === id ? { ...i, ...updates } : i));
   };
-
   const handleStartUdp = async (id: string) => {
     const instance = udpInstances.find(i => i.id === id);
     if (!instance) return;
-    
     try {
-      await invoke('start_udp', {
-        instance_id: id,
-        bind_addr: instance.bindAddr,
-      });
+      await invoke('start_udp', { instance_id: id, bind_addr: instance.bindAddr });
       setUdpInstances(prev => prev.map(i => i.id === id ? { ...i, status: 'running' } : i));
       addLog(`UDP 已启动: ${instance.bindAddr}`);
     } catch (e) {
@@ -562,60 +396,37 @@ function App() {
       addLog(`UDP 启动失败: ${e}`);
     }
   };
-
   const handleStopUdp = async (id: string) => {
     try {
       await invoke('stop_udp', { instance_id: id });
       setUdpInstances(prev => prev.map(i => i.id === id ? { ...i, status: 'stopped' } : i));
       addLog('UDP 已停止');
-    } catch (e) {
-      addLog(`停止 UDP 失败: ${e}`);
-    }
+    } catch (e) { addLog(`停止 UDP 失败: ${e}`); }
   };
-
   const handleSendUdp = async (id: string, targetAddr: string, data: string) => {
     try {
-      await invoke('send_udp', {
-        instance_id: id,
-        target_addr: targetAddr,
-        data: data,
-      });
+      await invoke('send_udp', { instance_id: id, target_addr: targetAddr, data: data });
       setUdpMessages(prev => [...prev, { direction: 'out', content: `[${targetAddr}] ${data}`, timestamp: Date.now() }]);
-    } catch (e) {
-      addLog(`发送 UDP 失败: ${e}`);
-    }
+    } catch (e) { addLog(`发送 UDP 失败: ${e}`); }
   };
 
-  // ========== WebSocket Server handlers ==========
   const handleAddWsServer = () => {
-    const newInstance: WsServerInstance = {
-      id: generateId(),
-      name: `WS 服务端 ${wsServerInstances.length + 1}`,
-      listen: 'ws://127.0.0.1:8080',
-      status: 'stopped',
-    };
+    const newInstance: WsServerInstance = { id: generateId(), name: `WS 服务端 ${wsServerInstances.length + 1}`, listen: 'ws://127.0.0.1:8080', status: 'stopped' };
     setWsServerInstances(prev => [...prev, newInstance]);
     setSelectedWsServerId(newInstance.id);
   };
-
   const handleDeleteWsServer = (id: string) => {
     setWsServerInstances(prev => prev.filter(i => i.id !== id));
     if (selectedWsServerId === id) setSelectedWsServerId(null);
   };
-
   const handleUpdateWsServer = (id: string, updates: Partial<WsServerInstance>) => {
     setWsServerInstances(prev => prev.map(i => i.id === id ? { ...i, ...updates } : i));
   };
-
   const handleStartWsServer = async (id: string) => {
     const instance = wsServerInstances.find(i => i.id === id);
     if (!instance) return;
-    
     try {
-      await invoke('start_ws_server', {
-        instance_id: id,
-        listen: instance.listen,
-      });
+      await invoke('start_ws_server', { instance_id: id, listen: instance.listen });
       setWsServerInstances(prev => prev.map(i => i.id === id ? { ...i, status: 'running' } : i));
       addLog(`WebSocket 服务端已启动: ${instance.listen}`);
     } catch (e) {
@@ -623,7 +434,6 @@ function App() {
       addLog(`WebSocket 服务端启动失败: ${e}`);
     }
   };
-
   const handleStopWsServer = async (id: string) => {
     try {
       await invoke('stop_ws_server', { instance_id: id });
@@ -631,55 +441,31 @@ function App() {
       setWsServerClients([]);
       setSelectedWsServerClient(null);
       addLog('WebSocket 服务端已停止');
-    } catch (e) {
-      addLog(`停止 WebSocket 服务端失败: ${e}`);
-    }
+    } catch (e) { addLog(`停止 WebSocket 服务端失败: ${e}`); }
   };
-
   const handleWsServerSendMessage = async (message: string, targetClient?: string) => {
     if (!targetClient) return;
-    try {
-      await invoke('send_ws_server_data', {
-        session_id: targetClient,
-        data: message,
-      });
-      // 不在这里添加消息，等后端返回 ws:data 事件后再添加
-    } catch (e) {
-      addLog(`发送失败: ${e}`);
-    }
+    try { await invoke('send_ws_server_data', { session_id: targetClient, data: message }); } 
+    catch (e) { addLog(`发送失败: ${e}`); }
   };
 
-
-  // ========== WebSocket Client handlers ==========
   const handleAddWsClient = () => {
-    const newInstance: WsClientInstance = {
-      id: generateId(),
-      name: `WS 客户端 ${wsClientInstances.length + 1}`,
-      serverUrl: 'ws://127.0.0.1:8080',
-      status: 'stopped',
-    };
+    const newInstance: WsClientInstance = { id: generateId(), name: `WS 客户端 ${wsClientInstances.length + 1}`, serverUrl: 'ws://127.0.0.1:8080', status: 'stopped' };
     setWsClientInstances(prev => [...prev, newInstance]);
     setSelectedWsClientId(newInstance.id);
   };
-
   const handleDeleteWsClient = (id: string) => {
     setWsClientInstances(prev => prev.filter(i => i.id !== id));
     if (selectedWsClientId === id) setSelectedWsClientId(null);
   };
-
   const handleUpdateWsClient = (id: string, updates: Partial<WsClientInstance>) => {
     setWsClientInstances(prev => prev.map(i => i.id === id ? { ...i, ...updates } : i));
   };
-
   const handleConnectWsClient = async (id: string) => {
     const instance = wsClientInstances.find(i => i.id === id);
     if (!instance) return;
-    
     try {
-      await invoke('start_ws_client', {
-        instance_id: id,
-        server_url: instance.serverUrl,
-      });
+      await invoke('start_ws_client', { instance_id: id, server_url: instance.serverUrl });
       setWsClientInstances(prev => prev.map(i => i.id === id ? { ...i, status: 'running' } : i));
       addLog(`已连接到: ${instance.serverUrl}`);
     } catch (e) {
@@ -687,88 +473,21 @@ function App() {
       addLog(`连接失败: ${e}`);
     }
   };
-
   const handleDisconnectWsClient = async (id: string) => {
     try {
       await invoke('stop_ws_client', { instance_id: id });
       setWsClientInstances(prev => prev.map(i => i.id === id ? { ...i, status: 'stopped' } : i));
       addLog('已断开连接');
-    } catch (e) {
-      addLog(`断开失败: ${e}`);
-    }
+    } catch (e) { addLog(`断开失败: ${e}`); }
   };
-
   const handleWsClientSendMessage = async (message: string) => {
-    try {
-      await invoke('send_ws_client_data', { data: message });
-      // 不在这里添加消息，等后端返回 ws:data 事件后再添加
-    } catch (e) {
-      addLog(`发送失败: ${e}`);
-    }
+    try { await invoke('send_ws_client_data', { data: message }); } 
+    catch (e) { addLog(`发送失败: ${e}`); }
   };
-
 
   return (
     <div className="app">
-      <div className="app-header">
-        <h1 className="app-title">NetForge</h1>
-        <div className="main-tabs">
-          <button
-            className={`main-tab ${activeTab === 'proxy' ? 'active' : ''}`}
-            onClick={() => setActiveTab('proxy')}
-          >
-            代理
-          </button>
-          <button
-            className={`main-tab ${activeTab === 'server' ? 'active' : ''}`}
-            onClick={() => setActiveTab('server')}
-          >
-            服务端
-          </button>
-          <button
-            className={`main-tab ${activeTab === 'client' ? 'active' : ''}`}
-            onClick={() => setActiveTab('client')}
-          >
-            客户端
-          </button>
-          <button
-            className={`main-tab ${activeTab === 'udp' ? 'active' : ''}`}
-            onClick={() => setActiveTab('udp')}
-          >
-            UDP
-          </button>
-          <button
-            className={`main-tab ${activeTab === 'ws-server' ? 'active' : ''}`}
-            onClick={() => setActiveTab('ws-server')}
-          >
-            WS 服务端
-          </button>
-          <button
-            className={`main-tab ${activeTab === 'ws-client' ? 'active' : ''}`}
-            onClick={() => setActiveTab('ws-client')}
-          >
-            WS 客户端
-          </button>
-        </div>
-        <div className="header-actions">
-          <button className="config-btn" onClick={async () => {
-            try {
-              const config = await invoke('export_config');
-              console.log('导出配置:', config);
-              alert('配置已导出');
-            } catch (e) { console.error(e); }
-          }}>导出</button>
-          <button className="config-btn" onClick={async () => {
-            try {
-              await invoke('import_config', { config: {} });
-              alert('配置已导入');
-            } catch (e) { console.error(e); }
-          }}>导入</button>
-          <button className="theme-toggle" onClick={toggleTheme} title="切换主题">
-            {theme === 'dark' ? '☀️' : '🌙'}
-          </button>
-        </div>
-      </div>
+      <Header activeTab={activeTab} setActiveTab={setActiveTab} theme={theme} toggleTheme={toggleTheme} />
 
       <div className="app-content">
         {activeTab === 'proxy' && (
@@ -872,24 +591,7 @@ function App() {
         )}
       </div>
 
-      <div className="app-footer">
-        <div className="log-area">
-          <div className="log-header">日志</div>
-          <div className="log-content">
-            {logs.map((log, i) => (
-              <div key={i} className="log-entry">
-                <span className="log-time">
-                  [{new Date(log.timestamp).toLocaleTimeString('zh-CN', { hour12: false })}]
-                </span>
-                <span className="log-message">{log.message}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-        <div className="status-bar">
-          <span className="version">v0.1.0</span>
-        </div>
-      </div>
+      <Footer logs={logs} />
     </div>
   );
 }
