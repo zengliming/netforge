@@ -2,13 +2,82 @@
 
 GUI 网络调试工具：TCP/TLS 代理 + Socket 调试器
 
-## 功能
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Rust](https://img.shields.io/badge/rust-1.70+-orange.svg)](https://www.rust-lang.org)
+[![Tauri](https://img.shields.io/badge/tauri-2.0-blue.svg)](https://tauri.app)
 
-- **TCP 代理** - 透明转发 TCP 流量
-- **TLS 代理** - 支持 TLS 终止的代理服务
-- **Socket 客户端** - 交互式 TCP 客户端，支持 hex/text/json 格式
-- **Socket 服务端** - 调试用 TCP 服务端
-- **GUI 模式** - 基于 Tauri 的桌面应用
+## 功能特性
+
+### 代理功能
+- **TCP 代理** - 透明转发 TCP 流量，支持监听多个连接
+- **TLS 代理** - 支持 TLS 终止的代理服务，使用 rustls 实现
+- **实时监控** - 连接状态、流量统计、数据传输可视化
+- **多连接管理** - 同时处理多个客户端连接，独立监控每个连接
+
+### Socket 调试
+- **TCP 客户端** - 交互式 TCP 客户端，支持自定义连接参数
+- **TCP 服务端** - 调试用 TCP 服务端，监听指定端口
+- **WebSocket 客户端** - WebSocket 客户端调试，支持握手协议
+- **WebSocket 服务端** - WebSocket 服务端调试，实时接收连接
+- **UDP 调试** - UDP 数据包收发，支持广播和组播
+
+### 数据处理
+- **多种数据格式** - 支持 hex、text、json 三种显示格式
+- **格式化显示** - JSON 自动格式化，hex 十六进制视图
+- **实时数据流** - 实时显示发送和接收的数据
+- **数据日志** - 完整的数据传输日志记录
+
+### GUI 界面
+- **现代化 UI** - 基于 React 19 + TypeScript 构建的桌面应用
+- **标签页设计** - 独立的功能标签页，方便切换不同调试工具
+- **配置面板** - 可视化配置界面，支持实时修改配置
+- **连接列表** - 实时显示所有活跃连接的状态和统计信息
+- **数据面板** - 分区显示发送和接收的数据
+- **日志面板** - 实时日志输出，支持过滤和搜索
+
+### 配置与持久化
+- **TOML 配置** - 使用标准的 TOML 格式配置文件
+- **配置持久化** - 配置自动保存，下次启动自动加载
+- **默认配置** - 提供配置示例，开箱即用
+
+## 支持的平台
+
+- **macOS** - Intel 和 Apple Silicon (M1/M2/M3) 架构
+- **Windows** - Windows 10 和 Windows 11
+- **Linux** - 主流发行版（Debian、Ubuntu、Arch、Fedora 等）
+
+## 项目优势
+
+### 高性能
+- 基于 **Rust + Tokio** 异步运行时，充分利用多核 CPU
+- 零拷贝设计，最小化内存开销
+- 高效的并发连接处理，轻松处理数千并发连接
+
+### 跨平台
+- **Tauri 2.0** 原生应用，不依赖浏览器运行时
+- 单一代码库，一次编译多平台运行
+- 原生系统 API 集成，更好的性能和用户体验
+
+### 轻量级
+- 相比 Electron 应用，安装包体积小 80% 以上
+- 内存占用低，资源消耗少
+- 启动速度快，响应及时
+
+### 安全性
+- 使用 **rustls** 实现 TLS，不依赖 OpenSSL
+- 内存安全保证，避免缓冲区溢出等安全问题
+- 类型安全，编译期检查大部分错误
+
+### 现代化技术栈
+- **Rust 2021** - 最新的 Rust 语言特性
+- **React 19** - 最新的 React 版本，提供最佳开发体验
+- **TypeScript** - 类型安全的前端开发
+- **Vite** - 快速的构建工具
+
+### 实时性
+- 异步事件驱动架构
+- WebSocket 实时通信
+- 低延迟的数据传输和显示
 
 ## 安装
 
@@ -112,6 +181,17 @@ netforge/
 │   └── socket/         # Socket 调试模块
 ├── src-tauri/          # Tauri 后端
 ├── src-ui/             # React 前端
+│   └── src/components/ # UI 组件
+│       ├── ProxyTab.tsx      # 代理标签页
+│       ├── ClientTab.tsx     # Socket 客户端
+│       ├── ServerTab.tsx     # Socket 服务端
+│       ├── WsClientTab.tsx   # WebSocket 客户端
+│       ├── WsServerTab.tsx   # WebSocket 服务端
+│       ├── UdpTab.tsx        # UDP 调试
+│       ├── ConnectionList.tsx # 连接列表
+│       ├── DataPanel.tsx      # 数据面板
+│       ├── LogPanel.tsx       # 日志面板
+│       └── ConfigPanel.tsx    # 配置面板
 └── config.example.toml # 配置示例
 ```
 
@@ -133,6 +213,29 @@ cargo tauri dev
 cargo tauri build
 ```
 
+### 测试
+
+```bash
+# 运行所有测试
+cargo test
+
+# 运行库测试
+cargo test --lib
+
+# 运行特定模块测试
+cargo test --lib socket::format
+```
+
+### 代码检查
+
+```bash
+# 运行 Clippy
+cargo clippy
+
+# 检查代码格式
+cargo fmt --check
+```
+
 ## 技术栈
 
 | 层 | 技术 |
@@ -140,3 +243,13 @@ cargo tauri build
 | 后端 | Rust 2021 + Tokio + Tauri 2.0 |
 | 前端 | React 19 + TypeScript + Vite |
 | TLS | rustls |
+| 配置 | TOML + serde |
+| 日志 | tracing |
+
+## 贡献
+
+欢迎提交 Issue 和 Pull Request！
+
+## 许可证
+
+[MIT License](LICENSE)
