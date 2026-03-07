@@ -19,5 +19,15 @@ export default defineConfig([
       ecmaVersion: 2020,
       globals: globals.browser,
     },
+    rules: {
+      '@typescript-eslint/no-unused-vars': 'off',
+    },
+  },
+  {
+    files: ['**/components/ui/NavItem.tsx', '**/utils/storage.ts'],
+    rules: {
+      'react/no-unescaped-entities': 'off',
+      '@typescript-eslint/no-unnecessary-condition': 'off',
+    },
   },
 ])

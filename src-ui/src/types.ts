@@ -70,11 +70,15 @@ export interface Connection {
 }
 
 
-// 消息
+export type MessageDirection = 'in' | 'out';
+export type MessageType = 'data' | 'system' | 'error';
+
 export interface Message {
-  direction: 'in' | 'out';
+  direction: MessageDirection;
+  type: MessageType;
   content: string;
   timestamp: number;
+  bytes?: number;
 }
 
 // 数据格式

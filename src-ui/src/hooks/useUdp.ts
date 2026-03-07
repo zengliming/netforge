@@ -73,7 +73,7 @@ export function useUdp() {
         target_addr: targetAddr,
         data: data,
       });
-      setUdpMessages(prev => [...prev, { direction: 'out', content: `[${targetAddr}] ${data}`, timestamp: Date.now() }]);
+      setUdpMessages(prev => [...prev, { direction: 'out', type: 'data', content: `[${targetAddr}] ${data}`, timestamp: Date.now() }]);
     } catch (e) {
       addLog(`发送 UDP 失败: ${e}`);
     }

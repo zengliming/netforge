@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
+import type { UnlistenFn } from '@tauri-apps/api/event';
 import './ProxyPanel.css';
 
 interface ProxyStatus {
@@ -25,40 +26,43 @@ export default function ProxyPanel() {
   const [stats, setStats] = useState<ProxyStats>({ connections: 0, bytesIn: 0, bytesOut: 0 });
   const [error, setError] = useState<string | null>(null);
 
-  async function loadStatus() {
+  const loadStatus = useCallback(async () => {
     try {
       const s = await invoke<ProxyStatus>('get_proxy_status');
       setStatus(s);
     } catch (e) {
       console.error('Failed to load status:', e);
     }
-  }
+  }, []);
 
   useEffect(() => {
-    // 加载初始状态
-    void loadStatus();
+    const unlisteners: UnlistenFn[] = [];
 
-    // 监听代理事件
-    const unlistenStatus = listen<ProxyStatus>('proxy:status', (event) => {
-      setStatus(event.payload);
-    });
+    const setupListeners = async () => {
+      const unlistenStatus = await listen<ProxyStatus>('proxy:status', (event) => {
+        setStatus(event.payload);
+      });
+      unlisteners.push(unlistenStatus);
 
-    const unlistenConnection = listen('proxy:connection', () => {
-      setStats(prev => ({ ...prev, connections: prev.connections + 1 }));
-    });
+      const unlistenConnection = await listen('proxy:connection', () => {
+        setStats(prev => ({ ...prev, connections: prev.connections + 1 }));
+      });
+      unlisteners.push(unlistenConnection);
 
-    const unlistenData = listen<{ bytesFromClient: number; bytesFromServer: number }>('proxy:data', (event) => {
-      setStats(prev => ({
-        ...prev,
-        bytesIn: prev.bytesIn + event.payload.bytesFromClient,
-        bytesOut: prev.bytesOut + event.payload.bytesFromServer,
-      }));
-    });
+      const unlistenData = await listen<{ bytesFromClient: number; bytesFromServer: number }>('proxy:data', (event) => {
+        setStats(prev => ({
+          ...prev,
+          bytesIn: prev.bytesIn + event.payload.bytesFromClient,
+          bytesOut: prev.bytesOut + event.payload.bytesFromServer,
+        }));
+      });
+      unlisteners.push(unlistenData);
+    };
+
+    setupListeners();
 
     return () => {
-      unlistenStatus.then(fn => fn());
-      unlistenConnection.then(fn => fn());
-      unlistenData.then(fn => fn());
+      unlisteners.forEach(unlisten => unlisten());
     };
   }, []);
 
@@ -116,14 +120,14 @@ export default function ProxyPanel() {
           />
         </div>
         <div className="form-group">
-          <label className="checkbox-label">
+          <label className="flex items-center gap-2">
             <input
               type="checkbox"
               checked={useTls}
               onChange={(e) => setUseTls(e.target.checked)}
               disabled={isRunning}
             />
-            <span className="text-sm">启用 TLS</span>
+            <span>启用 TLS</span>
           </label>
         </div>
         {useTls && (
@@ -134,7 +138,7 @@ export default function ProxyPanel() {
                 type="text"
                 value={certPath}
                 onChange={(e) => setCertPath(e.target.value)}
-                placeholder="./certs/server.crt"
+                placeholder="/path/to/cert.pem"
                 disabled={isRunning}
                 className="w-full"
               />
@@ -145,50 +149,50 @@ export default function ProxyPanel() {
                 type="text"
                 value={keyPath}
                 onChange={(e) => setKeyPath(e.target.value)}
-                placeholder="./certs/server.key"
+                placeholder="/path/to/key.pem"
                 disabled={isRunning}
                 className="w-full"
               />
             </div>
           </>
         )}
-        <div className="button-group">
+        <div className="form-actions">
           {!isRunning ? (
             <button onClick={handleStart} className="btn-primary">
-              启动
+              启动代理
             </button>
           ) : (
             <button onClick={handleStop} className="btn-danger">
-              停止
+              停止代理
             </button>
           )}
         </div>
-        {error && <div className="error-message text-sm">{error}</div>}
       </div>
-      <div className="proxy-status">
-        <div className="status-row">
-          <span className="text-sm text-muted">状态</span>
-          <span className={`status-badge ${isRunning ? 'status-active' : 'status-inactive'}`}>
-            {isRunning ? '运行中' : '已停止'}
+
+      {error && (
+        <div className="error-message">
+          {error}
+        </div>
+      )}
+
+      <div className="proxy-stats">
+        <div className="stat-item">
+          <span className="stat-label">状态</span>
+          <span className={`stat-value ${isRunning ? 'running' : 'stopped'}`}>
+            {status.status}
           </span>
         </div>
-        {isRunning && status.listen && status.target && (
-          <div className="status-row">
-            <span className="text-sm text-muted">转发</span>
-            <span className="text-sm">{status.listen} → {status.target}</span>
-          </div>
-        )}
-        <div className="status-row">
-          <span className="text-sm text-muted">连接数</span>
-          <span className="text-sm">{stats.connections}</span>
+        <div className="stat-item">
+          <span className="stat-label">连接数</span>
+          <span className="stat-value">{stats.connections}</span>
         </div>
-        <div className="status-row">
-          <span className="text-sm text-muted">入站</span>
-          <span className="text-sm font-mono">{formatBytes(stats.bytesIn)}</span>
+        <div className="stat-item">
+          <span className="stat-label">入站流量</span>
+          <span className="stat-value">{formatBytes(stats.bytesIn)}</span>
         </div>
-        <div className="status-row">
-          <span className="text-sm text-muted">出站</span>
-          <span className="text-sm font-mono">{formatBytes(stats.bytesOut)}</span>
+        <div className="stat-item">
+          <span className="stat-label">出站流量</span>
+          <span className="stat-value">{formatBytes(stats.bytesOut)}</span>
         </div>
       </div>
     </div>
@@ -196,9 +200,7 @@ export default function ProxyPanel() {
 }
 
 function formatBytes(bytes: number): string {
-  if (bytes === 0) return '0 B';
-  const k = 1024;
-  const sizes = ['B', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }

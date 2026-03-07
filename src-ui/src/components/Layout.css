@@ -259,12 +259,12 @@
   
   .layout-left {
     height: 200px;
-    border-bottom: 1px solid var(--border-subtle, #27272a);
+    border-bottom: 1px solid var(--border-subtle, #7373731F1F1F0C0C0C22C55E22C55E27272a);
   }
   
   .layout-right {
     height: 250px;
-    border-top: 1px solid var(--border-subtle, #27272a);
+    border-top: 1px solid var(--border-subtle, #7373731F1F1F0C0C0C22C55E22C55E27272a);
     border-left: none;
   }
   

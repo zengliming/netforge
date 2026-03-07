@@ -3,23 +3,23 @@
 .instance-card {
   padding: var(--space-sm, 8px) var(--space-md, 12px);
   padding-right: var(--space-xl, 24px); /* Space for delete button */
-  background: var(--bg-surface, #141419);
+  background: var(--bg-surface, #7373731F1F1F0C0C0C22C55E22C55E141419);
   border-radius: var(--radius-md, 8px);
   margin-bottom: var(--space-sm, 8px);
   cursor: pointer;
-  border: 1px solid var(--border-subtle, #27272a);
+  border: 1px solid var(--border-subtle, #7373731F1F1F0C0C0C22C55E22C55E27272a);
   transition: all var(--transition-normal, 250ms ease);
   position: relative;
 }
 
 .instance-card:hover {
   transform: scale(1.02);
-  border-color: var(--accent-primary, #3b82f6);
-  background: var(--bg-elevated, #1e1e26);
+  border-color: var(--accent-primary, #7373731F1F1F0C0C0C22C55E22C55E3b82f6);
+  background: var(--bg-elevated, #7373731F1F1F0C0C0C22C55E22C55E1e1e26);
 }
 
 .instance-card.selected {
-  border-color: var(--accent-primary, #3b82f6);
+  border-color: var(--accent-primary, #7373731F1F1F0C0C0C22C55E22C55E3b82f6);
 }
 
 /* Header row: status dot + name */
@@ -44,7 +44,7 @@
   flex: 1;
   font-weight: 500;
   font-size: 13px;
-  color: var(--text-primary, #ffffff);
+  color: var(--text-primary, #7373731F1F1F0C0C0C22C55E22C55Effffff);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -61,7 +61,7 @@
 /* Info line */
 .instance-info {
   font-size: 11px;
-  color: var(--text-muted, #6b7280);
+  color: var(--text-muted, #7373731F1F1F0C0C0C22C55E22C55E6b7280);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -77,7 +77,7 @@
   height: 20px;
   background: transparent;
   border: none;
-  color: var(--text-muted, #6b7280);
+  color: var(--text-muted, #7373731F1F1F0C0C0C22C55E22C55E6b7280);
   cursor: pointer;
   border-radius: var(--radius-sm, 4px);
   display: flex;
@@ -94,7 +94,7 @@
 }
 
 .delete-btn:hover {
-  background: var(--accent-error, #ef4444);
+  background: var(--accent-error, #7373731F1F1F0C0C0C22C55E22C55Eef4444);
   color: white;
   opacity: 1;
 }

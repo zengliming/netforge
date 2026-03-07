@@ -29,20 +29,20 @@
 .empty-state-title {
   font-size: 16px;
   font-weight: 600;
-  color: var(--text-primary, #ffffff);
+  color: var(--text-primary, #7373731F1F1F0C0C0C22C55E22C55Effffff);
   margin: 0 0 var(--space-xs, 4px) 0;
 }
 
 .empty-state-description {
   font-size: 13px;
-  color: var(--text-muted, #6b7280);
+  color: var(--text-muted, #7373731F1F1F0C0C0C22C55E22C55E6b7280);
   margin: 0 0 var(--space-md, 12px) 0;
   max-width: 200px;
 }
 
 .empty-state-action {
   padding: var(--space-xs, 4px) var(--space-lg, 16px);
-  background: var(--accent-primary, #3b82f6);
+  background: var(--accent-primary, #7373731F1F1F0C0C0C22C55E22C55E3b82f6);
   color: white;
   border: none;
   border-radius: var(--radius-sm, 4px);

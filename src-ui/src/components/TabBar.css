@@ -10,7 +10,7 @@
   padding: var(--space-sm, 8px) var(--space-lg, 16px);
   background: transparent;
   border: none;
-  color: var(--text-secondary, #a1a1aa);
+  color: var(--text-secondary, #7373731F1F1F0C0C0C22C55E22C55Ea1a1aa);
   cursor: pointer;
   border-radius: var(--radius-sm, 4px);
   transition: all var(--transition-fast, 150ms ease);
@@ -21,12 +21,12 @@
 }
 
 .tab-button:hover {
-  background: var(--bg-elevated, #1e1e26);
-  color: var(--text-primary, #ffffff);
+  background: var(--bg-elevated, #7373731F1F1F0C0C0C22C55E22C55E1e1e26);
+  color: var(--text-primary, #7373731F1F1F0C0C0C22C55E22C55Effffff);
 }
 
 .tab-button.active {
-  color: var(--accent-primary, #3b82f6);
+  color: var(--accent-primary, #7373731F1F1F0C0C0C22C55E22C55E3b82f6);
   font-weight: 500;
 }
 
@@ -35,9 +35,9 @@
   position: absolute;
   bottom: 0;
   height: 2px;
-  background: var(--accent-primary, #3b82f6);
+  background: var(--accent-primary, #7373731F1F1F0C0C0C22C55E22C55E3b82f6);
   border-radius: var(--radius-full, 9999px);
   transition: left var(--transition-normal, 250ms ease),
               width var(--transition-normal, 250ms ease);
-  box-shadow: 0 0 8px var(--accent-primary, #3b82f6);
+  box-shadow: 0 0 8px var(--accent-primary, #7373731F1F1F0C0C0C22C55E22C55E3b82f6);
 }

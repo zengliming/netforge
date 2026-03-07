@@ -3,8 +3,8 @@
 .log-panel {
   display: flex;
   flex-direction: column;
-  background: var(--bg-surface, #141419);
-  border-top: 1px solid var(--border-subtle, #27272a);
+  background: var(--bg-surface, #7373731F1F1F0C0C0C22C55E22C55E141419);
+  border-top: 1px solid var(--border-subtle, #7373731F1F1F0C0C0C22C55E22C55E27272a);
   height: 200px;
   min-height: 32px;
   transition: height var(--transition-normal, 250ms ease);
@@ -24,9 +24,9 @@
 .log-header {
   padding: var(--space-xs, 4px) var(--space-md, 12px);
   font-size: 12px;
-  color: var(--text-muted, #6b7280);
-  border-bottom: 1px solid var(--border-subtle, #27272a);
-  background: var(--bg-elevated, #1e1e26);
+  color: var(--text-muted, #7373731F1F1F0C0C0C22C55E22C55E6b7280);
+  border-bottom: 1px solid var(--border-subtle, #7373731F1F1F0C0C0C22C55E22C55E27272a);
+  background: var(--bg-elevated, #7373731F1F1F0C0C0C22C55E22C55E1e1e26);
   font-weight: 500;
   display: flex;
   align-items: center;
@@ -37,7 +37,7 @@
 }
 
 .log-header:hover {
-  background: var(--bg-surface, #141419);
+  background: var(--bg-surface, #7373731F1F1F0C0C0C22C55E22C55E141419);
 }
 
 .log-title {
@@ -55,7 +55,7 @@
   border: none;
   padding: var(--space-xs, 4px);
   cursor: pointer;
-  color: var(--text-muted, #6b7280);
+  color: var(--text-muted, #7373731F1F1F0C0C0C22C55E22C55E6b7280);
   transition: color var(--transition-fast, 150ms ease);
   display: flex;
   align-items: center;
@@ -63,7 +63,7 @@
 }
 
 .log-toggle:hover {
-  color: var(--text-secondary, #a1a1aa);
+  color: var(--text-secondary, #7373731F1F1F0C0C0C22C55E22C55Ea1a1aa);
 }
 
 .toggle-arrow {
@@ -86,13 +86,13 @@
   padding: var(--space-sm, 8px) var(--space-md, 12px);
   font-family: 'SF Mono', Monaco, Consolas, monospace;
   font-size: 12px;
-  background: var(--bg-base, #0a0a0f);
+  background: var(--bg-base, #7373731F1F1F0C0C0C22C55E22C55E0a0a0f);
   transition: opacity var(--transition-fast, 150ms ease),
               visibility var(--transition-fast, 150ms ease);
 }
 
 .log-empty {
-  color: var(--text-muted, #6b7280);
+  color: var(--text-muted, #7373731F1F1F0C0C0C22C55E22C55E6b7280);
   font-style: italic;
   padding: var(--space-sm, 8px) 0;
 }
@@ -105,12 +105,12 @@
 }
 
 .log-time {
-  color: var(--text-muted, #6b7280);
+  color: var(--text-muted, #7373731F1F1F0C0C0C22C55E22C55E6b7280);
   min-width: 70px;
   flex-shrink: 0;
 }
 
 .log-message {
-  color: var(--text-secondary, #a1a1aa);
+  color: var(--text-secondary, #7373731F1F1F0C0C0C22C55E22C55Ea1a1aa);
   word-break: break-all;
 }

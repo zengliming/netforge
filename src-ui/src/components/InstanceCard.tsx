@@ -41,6 +41,12 @@ export default function InstanceCard({
 }: InstanceCardProps) {
   const colors = statusColors[status] || statusColors.stopped;
 
+  const statusText = status === 'running' 
+    ? '运行中' 
+    : status === 'error' 
+      ? '错误' 
+      : '已停止';
+
   return (
     <div
       className={`instance-card ${selected ? 'selected' : ''}`}
@@ -50,7 +56,6 @@ export default function InstanceCard({
         boxShadow: selected ? colors.glow : 'none',
       }}
     >
-      {/* Delete button - top right */}
       <button
         className="delete-btn"
         onClick={(e) => {
@@ -62,7 +67,6 @@ export default function InstanceCard({
         ×
       </button>
 
-      {/* Header row: status dot + name */}
       <div className="instance-header">
         <div
           className="status-dot"
@@ -74,12 +78,10 @@ export default function InstanceCard({
         <span className="instance-name">{name}</span>
       </div>
 
-      {/* Status text */}
       <div className="instance-status" style={{ color: colors.text }}>
-        {status === 'running' ? '运行中' : status === 'error' ? '错误' : '已停止'}
+        {statusText}
       </div>
 
-      {/* Info line */}
       <div className="instance-info">{info}</div>
     </div>
   );

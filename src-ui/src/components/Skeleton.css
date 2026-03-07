@@ -3,9 +3,9 @@
 .skeleton {
   background: linear-gradient(
     90deg,
-    var(--bg-elevated, #1e1e26) 0%,
-    var(--bg-surface, #141419) 50%,
-    var(--bg-elevated, #1e1e26) 100%
+    var(--bg-elevated, #7373731F1F1F0C0C0C22C55E22C55E1e1e26) 0%,
+    var(--bg-surface, #7373731F1F1F0C0C0C22C55E22C55E141419) 50%,
+    var(--bg-elevated, #7373731F1F1F0C0C0C22C55E22C55E1e1e26) 100%
   );
   background-size: 200% 100%;
   animation: skeleton-shimmer 1.5s ease-in-out infinite;
@@ -42,7 +42,7 @@
   gap: var(--space-sm, 8px);
   padding: var(--space-sm, 8px);
   border-radius: var(--radius-md, 8px);
-  background: var(--bg-surface, #141419);
+  background: var(--bg-surface, #7373731F1F1F0C0C0C22C55E22C55E141419);
   margin-bottom: var(--space-xs, 4px);
 }
 
