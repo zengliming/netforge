@@ -1,5 +1,6 @@
 pub mod tcp;
 pub mod tls;
+pub mod utils;
 
 pub use tcp::run_tcp_proxy;
 pub use tcp::run_tcp_proxy_with_events;

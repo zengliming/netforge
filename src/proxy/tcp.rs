@@ -1,29 +1,15 @@
 use crate::error::ProxyError;
 use crate::events::{ProxyEvent, TrafficStats};
-use std::time::{SystemTime, UNIX_EPOCH};
+use super::utils::{build_connection_id, get_current_timestamp, send_proxy_event};
+use bytes::BytesMut;
 use tokio::io::{copy_bidirectional, AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::mpsc;
-use tokio::time::{interval, Duration};
+use tokio::time::{interval, timeout, Duration};
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
 
-fn get_current_timestamp() -> i64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|duration| duration.as_secs() as i64)
-        .unwrap_or(0)
-}
-
-fn build_connection_id(client_addr: &str) -> String {
-    format!("{}-{}", client_addr, get_current_timestamp())
-}
-
-async fn send_proxy_event(event_sender: &mpsc::Sender<ProxyEvent>, event: ProxyEvent) {
-    if let Err(err) = event_sender.send(event).await {
-        warn!("Failed to send proxy event: {}", err);
-    }
-}
+const DEFAULT_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 
 async fn handle_connection_with_events(
     mut client: TcpStream,
@@ -32,15 +18,19 @@ async fn handle_connection_with_events(
     event_sender: mpsc::Sender<ProxyEvent>,
     cancel_token: CancellationToken,
 ) {
-    match TcpStream::connect(&target).await {
-        Ok(server) => {
+    let connect_result = timeout(DEFAULT_CONNECT_TIMEOUT, TcpStream::connect(&target)).await;
+    
+    match connect_result {
+        Ok(Ok(server)) => {
             info!("Connected to target {}", target);
 
             let (mut client_reader, mut client_writer) = client.split();
             let (mut server_reader, mut server_writer) = server.into_split();
 
-            let mut client_buffer = [0u8; 16 * 1024];
-            let mut server_buffer = [0u8; 16 * 1024];
+            let mut client_buffer = BytesMut::with_capacity(16 * 1024);
+            client_buffer.resize(16 * 1024, 0);
+            let mut server_buffer = BytesMut::with_capacity(16 * 1024);
+            server_buffer.resize(16 * 1024, 0);
             let mut total_bytes_from_client = 0u64;
             let mut total_bytes_from_server = 0u64;
             let mut last_bytes_from_client = 0u64;
@@ -162,12 +152,22 @@ async fn handle_connection_with_events(
                 connection_id, total_bytes_from_client, total_bytes_from_server
             );
         }
-        Err(err) => {
+        Ok(Err(err)) => {
             error!("Failed to connect to target {}: {}", target, err);
             send_proxy_event(
                 &event_sender,
                 ProxyEvent::Error {
                     message: format!("连接目标 {} 失败: {}", target, err),
+                },
+            )
+            .await;
+        }
+        Err(_) => {
+            error!("Connection to target {} timed out after {:?}", target, DEFAULT_CONNECT_TIMEOUT);
+            send_proxy_event(
+                &event_sender,
+                ProxyEvent::Error {
+                    message: format!("连接目标 {} 超时 ({} 秒)", target, DEFAULT_CONNECT_TIMEOUT.as_secs()),
                 },
             )
             .await;

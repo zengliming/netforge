@@ -1,5 +1,3 @@
-#![allow(non_snake_case)]
-
 use crate::error::SocketError;
 use crate::events::{DataFormat as EventDataFormat, SocketEvent};
 use crate::socket::format::{format_data, DataFormat};
@@ -11,7 +9,7 @@ use tokio::net::tcp::OwnedWriteHalf;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{mpsc, Mutex, RwLock};
 use tokio_util::sync::CancellationToken;
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 
 type SharedClients = Arc<RwLock<HashMap<SocketAddr, Arc<Mutex<OwnedWriteHalf>>>>>;
 
@@ -23,83 +21,82 @@ fn map_event_data_format(format: DataFormat) -> EventDataFormat {
   }
 }
 
-async fn send_socket_event(eventSender: &mpsc::Sender<SocketEvent>, event: SocketEvent) {
-  eprintln!("[DEBUG] send_socket_event: {:?}", event);
-  if let Err(err) = eventSender.send(event).await {
-    eprintln!("[ERROR] Failed to send socket event: {}", err);
+async fn send_socket_event(event_sender: &mpsc::Sender<SocketEvent>, event: SocketEvent) {
+  debug!("send_socket_event: {:?}", event);
+  if let Err(err) = event_sender.send(event).await {
     warn!("Failed to send socket event: {}", err);
   }
 }
 async fn handle_gui_outbound_data(
-  eventSender: &mpsc::Sender<SocketEvent>,
+  event_sender: &mpsc::Sender<SocketEvent>,
   clients: &SharedClients,
-  targetAddr: SocketAddr,
+  target_addr: SocketAddr,
   data: Vec<u8>,
 ) {
-  let currentClients: Vec<(SocketAddr, Arc<Mutex<OwnedWriteHalf>>)> = {
-    let lockedClients = clients.read().await;
-    lockedClients
+  let current_clients: Vec<(SocketAddr, Arc<Mutex<OwnedWriteHalf>>)> = {
+    let locked_clients = clients.read().await;
+    locked_clients
       .iter()
       .map(|(addr, writer)| (*addr, Arc::clone(writer)))
       .collect()
   };
 
-  if currentClients.is_empty() {
+  if current_clients.is_empty() {
     send_socket_event(
-      eventSender,
+      event_sender,
       SocketEvent::Error {
         session_id: None,
-        message: format!("发送失败，当前没有可用客户端。目标地址: {}", targetAddr),
+        message: format!("发送失败，当前没有可用客户端。目标地址: {}", target_addr),
       },
     )
     .await;
     return;
   }
 
-  let mut removedAddrs = Vec::new();
-  for (clientAddr, writer) in currentClients {
-    let writeResult = {
-      let mut lockedWriter = writer.lock().await;
-      lockedWriter.write_all(&data).await
+  let mut removed_addrs = Vec::new();
+  for (client_addr, writer) in current_clients {
+    let write_result = {
+      let mut locked_writer = writer.lock().await;
+      locked_writer.write_all(&data).await
     };
 
-    match writeResult {
+    match write_result {
       Ok(_) => {
         send_socket_event(
-          eventSender,
+          event_sender,
           SocketEvent::DataSent {
-            session_id: clientAddr.to_string(),
+            session_id: client_addr.to_string(),
             data: data.clone(),
           },
         )
         .await;
       }
       Err(err) => {
-        error!("Write error to {}: {}", clientAddr, err);
+        error!("Write error to {}: {}", client_addr, err);
         send_socket_event(
-          eventSender,
+          event_sender,
           SocketEvent::Error {
-            session_id: Some(clientAddr.to_string()),
+            session_id: Some(client_addr.to_string()),
             message: format!("发送数据失败: {}", err),
           },
         )
         .await;
-        removedAddrs.push(clientAddr);
+        removed_addrs.push(client_addr);
       }
     }
   }
 
-  if !removedAddrs.is_empty() {
+  if !removed_addrs.is_empty() {
     {
-      let mut lockedClients = clients.write().await;
-      for addr in &removedAddrs {
-        lockedClients.remove(addr);
+      let mut locked_clients = clients.write().await;
+      for addr in &removed_addrs {
+        locked_clients.remove(addr);
       }
     }
 
-    for addr in removedAddrs {
+    for addr in removed_addrs {
       send_socket_event(
-        eventSender,
+        event_sender,
         SocketEvent::Disconnected {
           session_id: addr.to_string(),
         },
@@ -110,8 +107,8 @@ async fn handle_gui_outbound_data(
 }
 
 async fn handle_client_gui(
-  cancelToken: CancellationToken,
-  eventSender: mpsc::Sender<SocketEvent>,
+  cancel_token: CancellationToken,
+  event_sender: mpsc::Sender<SocketEvent>,
   clients: SharedClients,
   stream: TcpStream,
   addr: SocketAddr,
@@ -119,15 +116,15 @@ async fn handle_client_gui(
 ) {
   let (reader, writer) = stream.into_split();
   {
-    let mut lockedClients = clients.write().await;
-    lockedClients.insert(addr, Arc::new(Mutex::new(writer)));
+    let mut locked_clients = clients.write().await;
+    locked_clients.insert(addr, Arc::new(Mutex::new(writer)));
   }
 
   let mut reader = BufReader::new(reader);
-  let eventFormat = map_event_data_format(format);
+  let event_format = map_event_data_format(format);
 
   send_socket_event(
-    &eventSender,
+    &event_sender,
     SocketEvent::Connected {
       session_id: addr.to_string(),
       remote_addr: addr.to_string(),
@@ -138,21 +135,21 @@ async fn handle_client_gui(
   let mut buf = [0u8; 4096];
   loop {
     tokio::select! {
-      _ = cancelToken.cancelled() => {
+      _ = cancel_token.cancelled() => {
         break;
       }
-      readResult = reader.read(&mut buf) => {
-        match readResult {
+      read_result = reader.read(&mut buf) => {
+        match read_result {
           Ok(0) => {
             break;
           }
           Ok(n) => {
             send_socket_event(
-              &eventSender,
+              &event_sender,
               SocketEvent::DataReceived {
                 session_id: addr.to_string(),
                 data: buf[..n].to_vec(),
-                format: eventFormat.clone(),
+                format: event_format.clone(),
               },
             )
             .await;
@@ -160,7 +157,7 @@ async fn handle_client_gui(
           Err(err) => {
             error!("Read error from {}: {}", addr, err);
             send_socket_event(
-              &eventSender,
+              &event_sender,
               SocketEvent::Error {
                 session_id: Some(addr.to_string()),
                 message: format!("读取数据失败: {}", err),
@@ -175,12 +172,12 @@ async fn handle_client_gui(
   }
 
   {
-    let mut lockedClients = clients.write().await;
-    lockedClients.remove(&addr);
+    let mut locked_clients = clients.write().await;
+    locked_clients.remove(&addr);
   }
 
   send_socket_event(
-    &eventSender,
+    &event_sender,
     SocketEvent::Disconnected {
       session_id: addr.to_string(),
     },
@@ -189,9 +186,9 @@ async fn handle_client_gui(
 }
 
 pub async fn run_socket_server_gui(
-  cancelToken: CancellationToken,
-  eventSender: mpsc::Sender<SocketEvent>,
-  inputReceiver: mpsc::Receiver<(SocketAddr, Vec<u8>)>,
+  cancel_token: CancellationToken,
+  event_sender: mpsc::Sender<SocketEvent>,
+  input_receiver: mpsc::Receiver<(SocketAddr, Vec<u8>)>,
   listen: &str,
   format: DataFormat,
 ) -> Result<(), SocketError> {
@@ -199,7 +196,7 @@ pub async fn run_socket_server_gui(
     Ok(listener) => listener,
     Err(err) => {
       send_socket_event(
-        &eventSender,
+        &event_sender,
         SocketEvent::Error {
           session_id: None,
           message: format!("绑定地址 {} 失败: {}", listen, err),
@@ -210,33 +207,33 @@ pub async fn run_socket_server_gui(
     }
   };
 
-  eprintln!("[DEBUG] Socket server(gui) listening on {}", listen);
+  debug!("Socket server(gui) listening on {}", listen);
   info!("Socket server(gui) listening on {}", listen);
   let clients: SharedClients = Arc::new(RwLock::new(HashMap::new()));
-  let mut inputReceiver = inputReceiver;
-  let mut inputClosed = false;
+  let mut input_receiver = input_receiver;
+  let mut input_closed = false;
 
   loop {
     tokio::select! {
-      _ = cancelToken.cancelled() => {
+      _ = cancel_token.cancelled() => {
         break;
       }
-      acceptResult = listener.accept() => {
-        match acceptResult {
+      accept_result = listener.accept() => {
+        match accept_result {
           Ok((stream, addr)) => {
-            eprintln!("[DEBUG] Accepted connection from {}", addr);
-            let taskCancelToken = cancelToken.clone();
-            let taskEventSender = eventSender.clone();
-            let taskClients = Arc::clone(&clients);
+            debug!("Accepted connection from {}", addr);
+            let task_cancel_token = cancel_token.clone();
+            let task_event_sender = event_sender.clone();
+            let task_clients = Arc::clone(&clients);
             tokio::spawn(async move {
-              eprintln!("[DEBUG] Spawning handle_client_gui for {}", addr);
-              handle_client_gui(taskCancelToken, taskEventSender, taskClients, stream, addr, format).await;
+              debug!("Spawning handle_client_gui for {}", addr);
+              handle_client_gui(task_cancel_token, task_event_sender, task_clients, stream, addr, format).await;
             });
           }
           Err(err) => {
             error!("Accept error: {}", err);
             send_socket_event(
-              &eventSender,
+              &event_sender,
               SocketEvent::Error {
                 session_id: None,
                 message: format!("接受连接失败: {}", err),
@@ -246,13 +243,13 @@ pub async fn run_socket_server_gui(
           }
         }
       }
-      outbound = inputReceiver.recv(), if !inputClosed => {
+      outbound = input_receiver.recv(), if !input_closed => {
         match outbound {
-          Some((targetAddr, data)) => {
-            handle_gui_outbound_data(&eventSender, &clients, targetAddr, data).await;
+          Some((target_addr, data)) => {
+            handle_gui_outbound_data(&event_sender, &clients, target_addr, data).await;
           }
           None => {
-            inputClosed = true;
+            input_closed = true;
           }
         }
       }
@@ -266,14 +263,11 @@ pub async fn run_socket_server_gui(
 pub async fn run_socket_server(listen: &str, format: DataFormat) -> Result<(), SocketError> {
   let listener = TcpListener::bind(listen).await?;
   info!("Socket server listening on {}", listen);
-  println!("Socket server listening on {}", listen);
-  println!("Format: {:?}, Waiting for connections...", format);
+  info!("Format: {:?}, Waiting for connections...", format);
 
   loop {
     let (stream, addr) = listener.accept().await?;
     info!("Client connected: {}", addr);
-    println!("\n[Client connected: {}]", addr);
-
 
     tokio::spawn(async move {
       if let Err(e) = handle_client(stream, addr, format).await {
@@ -293,19 +287,19 @@ async fn handle_client(
   let writer = Arc::new(Mutex::new(writer));
 
   // 发送任务（从 stdin 读取并写入客户端）
-  let sendWriter = Arc::clone(&writer);
-  let sendFormat = format;
-  let sendHandle = tokio::spawn(async move {
+  let send_writer = Arc::clone(&writer);
+  let send_format = format;
+  let send_handle = tokio::spawn(async move {
     let stdin = tokio::io::stdin();
-    let mut stdinReader = BufReader::new(stdin).lines();
+    let mut stdin_reader = BufReader::new(stdin).lines();
 
     loop {
-      match stdinReader.next_line().await {
+      match stdin_reader.next_line().await {
         Ok(Some(line)) => {
-          let data = match build_send_data(&line, sendFormat) {
+          let data = match build_send_data(&line, send_format) {
             Ok(data) => data,
             Err(msg) => {
-              println!("[Invalid input] {}", msg);
+              warn!("Invalid input: {}", msg);
               continue;
             }
           };
@@ -314,13 +308,13 @@ async fn handle_client(
             continue;
           }
 
-          let mut lockedWriter = sendWriter.lock().await;
-          if let Err(e) = lockedWriter.write_all(&data).await {
+          let mut locked_writer = send_writer.lock().await;
+          if let Err(e) = locked_writer.write_all(&data).await {
             error!("Write error to {}: {}", addr, e);
             break;
           }
 
-          println!("[To {} sent {} bytes]", addr, data.len());
+          debug!("To {} sent {} bytes", addr, data.len());
         }
         Ok(None) => break,
         Err(e) => {
@@ -336,12 +330,12 @@ async fn handle_client(
   loop {
     match reader.read(&mut buf).await {
       Ok(0) => {
-        println!("\n[Client {} disconnected]", addr);
+        info!("Client {} disconnected", addr);
         break;
       }
       Ok(n) => {
         let formatted = format_data(&buf[..n], format);
-        println!("\n[From {} received {} bytes]:\n{}\n", addr, n, formatted);
+        debug!("From {} received {} bytes: {}", addr, n, formatted);
       }
       Err(e) => {
         error!("Read error from {}: {}", addr, e);
@@ -350,7 +344,7 @@ async fn handle_client(
     }
   }
 
-  sendHandle.abort();
+  send_handle.abort();
   Ok(())
 }
 
@@ -366,21 +360,21 @@ fn build_send_data(line: &str, format: DataFormat) -> Result<Vec<u8>, String> {
 }
 
 fn parse_hex_data(input: &str) -> Result<Vec<u8>, String> {
-  let cleanedInput: String = input.chars().filter(|c| !c.is_whitespace()).collect();
-  if cleanedInput.is_empty() {
+  let cleaned_input: String = input.chars().filter(|c| !c.is_whitespace()).collect();
+  if cleaned_input.is_empty() {
     return Ok(Vec::new());
   }
 
-  if !cleanedInput.len().is_multiple_of(2) {
+  if !cleaned_input.len().is_multiple_of(2) {
     return Err("十六进制字符串长度必须是偶数".to_string());
   }
 
-  let mut result = Vec::with_capacity(cleanedInput.len() / 2);
+  let mut result = Vec::with_capacity(cleaned_input.len() / 2);
   let mut index = 0;
-  while index < cleanedInput.len() {
-    let bytePart = &cleanedInput[index..index + 2];
-    let value = u8::from_str_radix(bytePart, 16)
-      .map_err(|_| format!("无效十六进制字节: {}", bytePart))?;
+  while index < cleaned_input.len() {
+    let byte_part = &cleaned_input[index..index + 2];
+    let value = u8::from_str_radix(byte_part, 16)
+      .map_err(|_| format!("无效十六进制字节: {}", byte_part))?;
     result.push(value);
     index += 2;
   }
@@ -406,9 +400,9 @@ mod tests {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
 
-    let serverHandle = tokio::spawn(async move {
-      let (mut stream, clientAddr) = listener.accept().await.unwrap();
-      assert!(clientAddr.port() > 0);
+    let server_handle = tokio::spawn(async move {
+      let (mut stream, client_addr) = listener.accept().await.unwrap();
+      assert!(client_addr.port() > 0);
       let mut buf = [0u8; 16];
       let n = stream.read(&mut buf).await.unwrap();
       assert_eq!(&buf[..n], b"ping");
@@ -418,7 +412,7 @@ mod tests {
     let mut client = TcpStream::connect(addr).await.unwrap();
     client.write_all(b"ping").await.unwrap();
 
-    serverHandle.await.unwrap();
+    server_handle.await.unwrap();
   }
 
   #[test]
@@ -433,7 +427,7 @@ mod tests {
     assert_eq!(data, b"hi");
   }
 
-  #[test]
+#[test]
   fn test_socket_server_build_send_data_hex_invalid() {
     let result = build_send_data("6g", DataFormat::Hex);
     assert!(result.is_err());

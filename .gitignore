@@ -21,7 +21,7 @@ Cargo.lock
 *.bak[0-9]
 *.swp
 *~
-
+.npm-cache
 # IDE 和编辑器
 .idea/
 .vscode/

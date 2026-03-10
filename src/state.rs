@@ -2,6 +2,7 @@
 
 use crate::events::{ConnectionInfo, DataFormat, ProxyStatus, SocketSession};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -21,8 +22,8 @@ pub struct AppState {
 pub struct ProxyState {
     /// 运行状态
     pub status: ProxyStatus,
-    /// 活跃连接列表
-    pub connections: Vec<ConnectionInfo>,
+    /// 活跃连接列表 (id -> ConnectionInfo)
+    pub connections: HashMap<String, ConnectionInfo>,
     /// 总流量统计
     pub total_bytes_in: u64,
     pub total_bytes_out: u64,
@@ -36,13 +37,11 @@ pub struct ConfigSnapshot {
     pub socket_format: DataFormat,
 }
 
-
-
 impl Default for ProxyState {
     fn default() -> Self {
         Self {
             status: ProxyStatus::Stopped,
-            connections: Vec::new(),
+            connections: HashMap::new(),
             total_bytes_in: 0,
             total_bytes_out: 0,
         }

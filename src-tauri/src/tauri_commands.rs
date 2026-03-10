@@ -5,6 +5,7 @@
 use netforge::config::Config;
 use netforge::events::{DataFormat, ProxyEvent, ProxyStatus, SocketEvent};
 use tauri::Emitter;
+use tracing::{debug, error};
 use netforge::proxy::{run_tcp_proxy_with_events, run_tls_proxy_with_events};
 use netforge::socket::format::DataFormat as SocketDataFormat;
 use netforge::socket::{run_socket_client_gui, run_socket_server_gui};
@@ -109,7 +110,7 @@ pub async fn start_proxy(
                 listen: listen.clone(),
                 target: target.clone(),
             },
-            connections: Vec::new(),
+            connections: HashMap::new(),
             total_bytes_in: 0,
             total_bytes_out: 0,
         };
@@ -120,35 +121,42 @@ pub async fn start_proxy(
     let instance_id_clone = instance_id.clone();
     let app_handle_clone = app_handle.clone();
 
-    // 启动代理任务
+// 启动代理任务
     let handle = tokio::spawn(async move {
         // 事件处理循环
-        let event_instance_id = instance_id_clone.clone();
+        let _event_instance_id = instance_id_clone.clone();
         let event_app_handle = app_handle_clone.clone();
         tokio::spawn(async move {
             while let Some(event) = event_receiver.recv().await {
                 match &event {
                     ProxyEvent::NewConnection { id, source, target, .. } => {
-                        let _ = event_app_handle.emit("proxy:connection", serde_json::json!({
+                        if let Err(e) = event_app_handle.emit("proxy:connection", serde_json::json!({
                             "id": id,
                             "source": source,
                             "target": target
-                        }));
+                        })) {
+                            tracing::warn!("Failed to emit proxy:connection event: {}", e);
+                        }
                     }
                     ProxyEvent::DataTransferred { id, bytes_from_client, bytes_from_server } => {
-                        let _ = event_app_handle.emit("proxy:data", serde_json::json!({
+                        if let Err(e) = event_app_handle.emit("proxy:data", serde_json::json!({
                             "id": id,
                             "bytesFromClient": bytes_from_client,
                             "bytesFromServer": bytes_from_server
-                        }));
+                        })) {
+                            tracing::warn!("Failed to emit proxy:data event: {}", e);
+                        }
                     }
                     ProxyEvent::ConnectionClosed { id, .. } => {
-                        let _ = event_app_handle.emit("proxy:closed", serde_json::json!({ "id": id }));
+                        if let Err(e) = event_app_handle.emit("proxy:closed", serde_json::json!({ "id": id })) {
+                            tracing::warn!("Failed to emit proxy:closed event: {}", e);
+                        }
                     }
                     _ => {}
                 }
-                // 也发射通用事件
-                let _ = event_app_handle.emit("proxy:event", &event);
+                if let Err(e) = event_app_handle.emit("proxy:event", &event) {
+                    tracing::warn!("Failed to emit proxy:event: {}", e);
+                }
             }
         });
 
@@ -174,7 +182,7 @@ pub async fn start_proxy(
         };
 
         if let Err(e) = result {
-            eprintln!("Proxy error: {}", e);
+            error!("Proxy error: {}", e);
         }
     });
 
@@ -266,24 +274,24 @@ pub async fn start_socket_server(
     let app_handle_clone = app_handle.clone();
 
     // 启动 Socket 服务器任务
-    eprintln!("[DEBUG] Starting socket server task for instance {}", instance_id);
+    debug!("Starting socket server task for instance {}", instance_id);
     let handle = tokio::spawn(async move {
-        eprintln!("[DEBUG] Socket server task started");
+        debug!("Socket server task started");
         // 事件处理循环
         let event_instance_id = instance_id_clone.clone();
         let event_app_handle = app_handle_clone.clone();
         tokio::spawn(async move {
             while let Some(event) = event_receiver.recv().await {
                 // 发射事件到前端
-                eprintln!("[DEBUG] Socket event: {:?}", event);
+                debug!("Socket event: {:?}", event);
                 match &event {
                     SocketEvent::Connected { session_id, remote_addr: _ } => {
-                        eprintln!("[DEBUG] Emitting socket:client_connected for instance {}", event_instance_id);
+                        debug!("Emitting socket:client_connected for instance {}", event_instance_id);
                         if let Err(e) = event_app_handle.emit("socket:client_connected", serde_json::json!({
                             "instance_id": event_instance_id,
                             "client_addr": session_id
                         })) {
-                            eprintln!("[ERROR] Failed to emit socket:client_connected: {}", e);
+                            error!("Failed to emit socket:client_connected: {}", e);
                         }
                     }
                     SocketEvent::Disconnected { session_id } => {
@@ -291,7 +299,7 @@ pub async fn start_socket_server(
                             "instance_id": event_instance_id,
                             "client_addr": session_id
                         })) {
-                            eprintln!("[ERROR] Failed to emit socket:client_disconnected: {}", e);
+                            error!("Failed to emit socket:client_disconnected: {}", e);
                         }
                     }
                     SocketEvent::DataReceived { session_id, data, .. } => {
@@ -302,7 +310,7 @@ pub async fn start_socket_server(
                             "direction": "in",
                             "data": String::from_utf8_lossy(data)
                         })) {
-                            eprintln!("[ERROR] Failed to emit socket:data: {}", e);
+                            error!("Failed to emit socket:data: {}", e);
                         }
                     }
                     SocketEvent::DataSent { session_id, data, .. } => {
@@ -313,7 +321,7 @@ pub async fn start_socket_server(
                             "direction": "out",
                             "data": String::from_utf8_lossy(data)
                         })) {
-                            eprintln!("[ERROR] Failed to emit socket:data: {}", e);
+                            error!("Failed to emit socket:data: {}", e);
                         }
                     }
                     SocketEvent::Error { message, .. } => {
@@ -321,7 +329,7 @@ pub async fn start_socket_server(
                             "instance_id": event_instance_id,
                             "message": message
                         })) {
-                            eprintln!("[ERROR] Failed to emit socket:error: {}", e);
+                            error!("Failed to emit socket:error: {}", e);
                         }
                     }
                 }
@@ -329,13 +337,13 @@ pub async fn start_socket_server(
         });
 
         // 运行 Socket 服务器
-        eprintln!("[DEBUG] Calling run_socket_server_gui");
+        debug!("Calling run_socket_server_gui");
         let result =
             run_socket_server_gui(task_cancel_token, event_sender, input_receiver, &listen, socket_format)
                 .await;
-        eprintln!("[DEBUG] run_socket_server_gui finished");
+        debug!("run_socket_server_gui finished");
         if let Err(e) = result {
-            eprintln!("Socket server error: {}", e);
+            error!("Socket server error: {}", e);
         }
     });
 
@@ -452,15 +460,15 @@ pub async fn start_socket_client(
         let event_app_handle = app_handle_clone.clone();
         tokio::spawn(async move {
             while let Some(event) = event_receiver.recv().await {
-                eprintln!("[DEBUG] Client event: {:?}", event);
+                debug!("Client event: {:?}", event);
                 match &event {
                     SocketEvent::Connected { session_id, .. } => {
-                        eprintln!("[DEBUG] Client connected: {}", session_id);
+                        debug!("Client connected: {}", session_id);
                         if let Err(e) = event_app_handle.emit("socket:connected", serde_json::json!({
                             "instance_id": event_instance_id,
                             "server": session_id
                         })) {
-                            eprintln!("[ERROR] Failed to emit: {}", e);
+                            error!("Failed to emit: {}", e);
                         }
                     }
                     SocketEvent::Disconnected { session_id, .. } => {
@@ -468,7 +476,7 @@ pub async fn start_socket_client(
                             "instance_id": event_instance_id,
                             "session_id": session_id
                         })) {
-                            eprintln!("[ERROR] Failed to emit: {}", e);
+                            error!("Failed to emit: {}", e);
                         }
                     }
                     SocketEvent::DataReceived { data, .. } => {
@@ -478,7 +486,7 @@ pub async fn start_socket_client(
                             "direction": "in",
                             "data": String::from_utf8_lossy(data)
                         })) {
-                            eprintln!("[ERROR] Failed to emit: {}", e);
+                            error!("Failed to emit: {}", e);
                         }
                     }
                     SocketEvent::DataSent { data, .. } => {
@@ -488,7 +496,7 @@ pub async fn start_socket_client(
                             "direction": "out",
                             "data": String::from_utf8_lossy(data)
                         })) {
-                            eprintln!("[ERROR] Failed to emit: {}", e);
+                            error!("Failed to emit: {}", e);
                         }
                     }
                     SocketEvent::Error { message, .. } => {
@@ -496,7 +504,7 @@ pub async fn start_socket_client(
                             "instance_id": event_instance_id,
                             "message": message
                         })) {
-                            eprintln!("[ERROR] Failed to emit: {}", e);
+                            error!("Failed to emit: {}", e);
                         }
                     }
                 }
@@ -509,7 +517,7 @@ pub async fn start_socket_client(
                 .await;
 
         if let Err(e) = result {
-            eprintln!("Socket client error: {}", e);
+            error!("Socket client error: {}", e);
         }
     });
 
@@ -663,7 +671,7 @@ pub async fn start_udp(
                                 "data": String::from_utf8_lossy(&data).to_string()
                             }),
                         ) {
-                            eprintln!("Failed to emit udp:data: {}", e);
+                            error!("Failed to emit udp:data: {}", e);
                         }
                     }
                     UdpEvent::Error { message, .. } => {
@@ -674,7 +682,7 @@ pub async fn start_udp(
                                 "message": message,
                             }),
                         ) {
-                            eprintln!("Failed to emit udp:error: {}", e);
+                            error!("Failed to emit udp:error: {}", e);
                         }
                     }
                 }
@@ -691,7 +699,7 @@ pub async fn start_udp(
         .await;
 
         if let Err(e) = result {
-            eprintln!("UDP error: {}", e);
+            error!("UDP error: {}", e);
         }
     });
 
@@ -777,7 +785,7 @@ pub async fn start_ws_server(
         tokio::spawn(async move {
             while let Some(event) = event_receiver.recv().await {
                 if let Err(e) = event_app_handle.emit("ws:event", &event) {
-                    eprintln!("Failed to emit ws:event: {}", e);
+                    error!("Failed to emit ws:event: {}", e);
                 }
             }
         });
@@ -791,7 +799,7 @@ pub async fn start_ws_server(
         )
         .await;
         if let Err(e) = result {
-            eprintln!("WebSocket server error: {}", e);
+            error!("WebSocket server error: {}", e);
         }
     });
 
@@ -889,7 +897,7 @@ pub async fn start_ws_client(
                 event.event = event_name.to_string();
 
                 if let Err(e) = event_app_handle.emit("ws:client_event", &event) {
-                    eprintln!("Failed to emit ws:client_event: {}", e);
+                    error!("Failed to emit ws:client_event: {}", e);
                 }
             }
         });
@@ -904,7 +912,7 @@ pub async fn start_ws_client(
         .await;
 
         if let Err(e) = result {
-            eprintln!("WebSocket client error: {}", e);
+            error!("WebSocket client error: {}", e);
         }
     });
 

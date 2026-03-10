@@ -165,12 +165,7 @@ pub async fn run_socket_client_gui(
 /// 运行 Socket 调试客户端
 pub async fn run_socket_client(addr: &str, format: DataFormat) -> Result<(), SocketError> {
   let stream = TcpStream::connect(addr).await?;
-  info!("Connected to {}", addr);
-  println!("Connected to {}", addr);
-  println!(
-    "Format: {:?}, Type message and press Enter to send, Ctrl+C to exit",
-    format
-  );
+  info!("Connected to {} (format: {:?})", addr, format);
 
   let (reader, mut writer) = stream.into_split();
   let mut reader = BufReader::new(reader);
@@ -182,12 +177,12 @@ pub async fn run_socket_client(addr: &str, format: DataFormat) -> Result<(), Soc
     loop {
       match reader.read(&mut buf).await {
         Ok(0) => {
-          println!("\n[Connection closed by server]");
+          info!("Connection closed by server");
           break;
         }
         Ok(n) => {
           let formatted = format_data(&buf[..n], recv_format);
-          println!("\n[Received {} bytes]:\n{}\n", n, formatted);
+          info!("Received {} bytes: {}", n, formatted);
           print!("> ");
         }
         Err(e) => {

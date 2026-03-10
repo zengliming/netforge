@@ -3,6 +3,7 @@
 use crate::error::ConfigError;
 use serde::{Deserialize, Serialize};
 use std::fs;
+use std::net::ToSocketAddrs;
 
 /// 主配置
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -41,6 +42,29 @@ pub struct SocketConfig {
 
 fn default_format() -> String {
     "text".to_string()
+}
+
+/// 验证网络地址格式
+///
+/// 检查格式: IP:PORT
+/// - IP: 有效的 IPv4 或 IPv6 地址
+/// - PORT: 1-65535 范围内
+pub fn validate_address(addr: &str) -> Result<(), String> {
+    // 检查是否包含端口
+    if !addr.contains(':') {
+        return Err("地址格式错误: 缺少端口号 (格式: IP:PORT)".to_string());
+    }
+
+    // 尝试解析地址
+    match addr.to_socket_addrs() {
+        Ok(mut addrs) => {
+            if addrs.next().is_none() {
+                return Err("地址解析失败: 无效的地址".to_string());
+            }
+            Ok(())
+        }
+        Err(e) => Err(format!("地址解析失败: {}", e)),
+    }
 }
 
 impl Config {

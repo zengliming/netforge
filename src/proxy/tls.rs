@@ -1,36 +1,38 @@
 use crate::error::ProxyError;
-use crate::events::ProxyEvent;
+use crate::events::{ProxyEvent, TrafficStats};
+use super::utils::{build_connection_id, get_current_timestamp, send_proxy_event};
+use bytes::BytesMut;
 use std::fs::File;
 use std::io::BufReader;
 use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::io::{copy_bidirectional, AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 use tokio::sync::mpsc;
+use tokio::time::{interval, Duration};
 use tokio_util::sync::CancellationToken;
 use tokio_rustls::rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use tokio_rustls::rustls::ServerConfig;
 use tokio_rustls::TlsAcceptor;
 use tracing::{error, info, warn};
 
-fn get_current_timestamp() -> i64 {
-  SystemTime::now()
-    .duration_since(UNIX_EPOCH)
-    .map(|duration| duration.as_secs() as i64)
-    .unwrap_or(0)
-}
-
-fn build_connection_id(client_addr: &str) -> String {
-  format!("{}-{}", client_addr, get_current_timestamp())
-}
-
-async fn send_proxy_event(event_sender: &mpsc::Sender<ProxyEvent>, event: ProxyEvent) {
-  if let Err(err) = event_sender.send(event).await {
-    warn!("Failed to send proxy event: {}", err);
+fn validate_cert_path(path: &str) -> Result<std::path::PathBuf, ProxyError> {
+  let path = std::path::Path::new(path);
+  
+  // 获取规范化的绝对路径
+  let canonical = path.canonicalize()
+    .map_err(|e| ProxyError::CertError(format!("证书路径无效: {}", e)))?;
+  
+  // 检查是否为文件
+  if !canonical.is_file() {
+    return Err(ProxyError::CertError("证书路径不是有效文件".to_string()));
   }
+  
+  Ok(canonical)
 }
 
 fn load_certs(path: &str) -> Result<Vec<CertificateDer<'static>>, ProxyError> {
+  validate_cert_path(path)?;
+  
   let file = File::open(path).map_err(|e| ProxyError::CertError(e.to_string()))?;
   let mut reader = BufReader::new(file);
   let certs = rustls_pemfile::certs(&mut reader)
@@ -40,6 +42,8 @@ fn load_certs(path: &str) -> Result<Vec<CertificateDer<'static>>, ProxyError> {
 }
 
 fn load_private_key(path: &str) -> Result<PrivateKeyDer<'static>, ProxyError> {
+  validate_cert_path(path)?;
+  
   let file = File::open(path).map_err(|e| ProxyError::CertError(e.to_string()))?;
   let mut reader = BufReader::new(file);
   let key = rustls_pemfile::private_key(&mut reader)
@@ -68,16 +72,46 @@ async fn handle_tls_connection_with_events(
           let (mut client_reader, mut client_writer) = tokio::io::split(client);
           let (mut server_reader, mut server_writer) = server.into_split();
 
-          let mut client_buffer = [0u8; 16 * 1024];
-          let mut server_buffer = [0u8; 16 * 1024];
+          let mut client_buffer = BytesMut::with_capacity(16 * 1024);
+          client_buffer.resize(16 * 1024, 0);
+          let mut server_buffer = BytesMut::with_capacity(16 * 1024);
+          server_buffer.resize(16 * 1024, 0);
           let mut total_bytes_from_client = 0u64;
           let mut total_bytes_from_server = 0u64;
+          let mut last_bytes_from_client = 0u64;
+          let mut last_bytes_from_server = 0u64;
+          let mut stats_interval = interval(Duration::from_secs(1));
+          stats_interval.tick().await;
 
           loop {
             tokio::select! {
               _ = cancel_token.cancelled() => {
                 info!("TLS connection {} cancelled", connection_id);
                 break;
+              }
+              _ = stats_interval.tick() => {
+                let bytes_in_delta = total_bytes_from_client - last_bytes_from_client;
+                let bytes_out_delta = total_bytes_from_server - last_bytes_from_server;
+                let rate_in = bytes_in_delta as f64;
+                let rate_out = bytes_out_delta as f64;
+                
+                let stats = TrafficStats {
+                  bytes_in: total_bytes_from_client,
+                  bytes_out: total_bytes_from_server,
+                  rate_in,
+                  rate_out,
+                };
+                
+                send_proxy_event(
+                  &event_sender,
+                  ProxyEvent::Stats {
+                    id: connection_id.clone(),
+                    stats,
+                  },
+                ).await;
+                
+                last_bytes_from_client = total_bytes_from_client;
+                last_bytes_from_server = total_bytes_from_server;
               }
               read_from_client = client_reader.read(&mut client_buffer) => {
                 match read_from_client {

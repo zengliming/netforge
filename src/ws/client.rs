@@ -59,14 +59,17 @@ pub async fn run_ws_client(
   server: &str,
   instance_id: String,
 ) -> Result<(), WsClientError> {
-  if !server.starts_with("ws://") {
+  let is_secure = server.starts_with("wss://");
+  let is_plain = server.starts_with("ws://");
+  
+  if !is_plain && !is_secure {
     send_ws_event(
       &event_sender,
       "ws:error",
       json!({
         "instance_id": instance_id,
         "server": server,
-        "message": format!("仅支持 ws:// 协议地址，当前地址: {}", server)
+        "message": format!("仅支持 ws:// 和 wss:// 协议地址，当前地址: {}", server)
       }),
     )
     .await;
